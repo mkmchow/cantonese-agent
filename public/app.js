@@ -9,6 +9,7 @@ let isAISpeaking = false; // Track if AI is in speaking mode
 let vadEnabled = false; // Only enable VAD after echo cancellation stabilizes
 let audioStartTime = 0; // Track when audio started
 let recentAudioLevels = []; // Track recent audio levels for echo detection
+let audioUnlocked = false; // Track if iOS audio is unlocked
 
 // Audio buffering for STT initialization
 let sttReady = false; // Track if STT is ready to receive audio
@@ -99,6 +100,23 @@ startBtn.addEventListener('click', async () => {
     if (audioContext.state === 'suspended') {
       await audioContext.resume();
       console.log('[Audio] AudioContext resumed for iOS');
+    }
+    
+    // iOS Audio Unlock: Play silent audio on user gesture
+    if (!audioUnlocked) {
+      try {
+        debugMsg('🔓 Unlocking iOS audio...');
+        const silentAudio = new Audio();
+        silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S/5VEkAAAAAAD/+xDEAAP8AAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxA8DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
+        silentAudio.volume = 0.01;
+        await silentAudio.play();
+        audioUnlocked = true;
+        debugMsg('✅ iOS audio unlocked');
+        console.log('[Audio] iOS audio unlocked');
+      } catch (e) {
+        debugMsg('⚠️ Audio unlock failed: ' + e.message);
+        console.warn('[Audio] Failed to unlock:', e);
+      }
     }
     
     // Request microphone with aggressive echo cancellation
@@ -269,6 +287,7 @@ stopBtn.addEventListener('click', () => {
   sttReady = false;
   audioBuffer = [];
   allowAudioStreaming = false;
+  audioUnlocked = false; // Reset iOS audio unlock
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
