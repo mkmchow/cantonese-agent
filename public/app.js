@@ -22,6 +22,12 @@ const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
 const waveform = document.getElementById('waveform');
+const mobileHint = document.getElementById('mobileHint');
+
+// Show mobile hint if on mobile device
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  if (mobileHint) mobileHint.style.display = 'block';
+}
 
 // Connect to WebSocket
 connectBtn.addEventListener('click', () => {
@@ -64,6 +70,17 @@ startBtn.addEventListener('click', async () => {
     audioBuffer = [];
     console.log('[STT] Waiting for STT ready signal...');
     
+    // iOS Audio Context Fix: Resume audio context on user gesture
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    }
+    
+    // Resume audio context (iOS requirement)
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+      console.log('[Audio] AudioContext resumed for iOS');
+    }
+    
     // Request microphone with aggressive echo cancellation
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -77,8 +94,7 @@ startBtn.addEventListener('click', async () => {
       }
     });
 
-    // Setup audio context
-    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    // Setup audio processing
     const source = audioContext.createMediaStreamSource(stream);
     const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -87,6 +103,10 @@ startBtn.addEventListener('click', async () => {
 
     let lastAudioLevel = 0;
     let isSpeakingLocally = false;
+    
+    // Detect mobile device for adjusted VAD settings
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    console.log('[Device] Mobile detected:', isMobile);
     
     // Voice Activity Detection (VAD) Thresholds
     // Adjust these if interruption is too sensitive or not sensitive enough:
@@ -479,14 +499,17 @@ function playNextInQueue() {
     setStatus('speaking', 'AI講緊嘢...');
     console.log('[Audio] ▶️ Playing (started at: ' + audioStartTime + ')');
     
-    // Enable VAD after 300ms to let echo cancellation stabilize
-    // This prevents false interruptions from the first few milliseconds of audio
+    // Enable VAD after delay to let echo cancellation stabilize
+    // Mobile needs longer delay due to weaker echo cancellation
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const vadDelay = isMobile ? 1000 : 300; // 1s for mobile, 300ms for desktop
+    
     setTimeout(() => {
       if (isAISpeaking && isPlaying) {
         vadEnabled = true;
-        console.log('[VAD] ✅ Enabled (echo cancellation stabilized)');
+        console.log('[VAD] ✅ Enabled after ' + vadDelay + 'ms (mobile: ' + isMobile + ')');
       }
-    }, 300); // 300ms warm-up time for echo cancellation
+    }, vadDelay);
   };
 
   audio.onended = () => {
