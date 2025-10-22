@@ -1,0 +1,605 @@
+// Client-side app with interruption support
+let ws = null;
+let audioContext = null;
+let mediaRecorder = null;
+let audioQueue = [];
+let isPlaying = false;
+let currentAudio = null;
+let isAISpeaking = false; // Track if AI is in speaking mode
+let vadEnabled = false; // Only enable VAD after echo cancellation stabilizes
+let audioStartTime = 0; // Track when audio started
+let recentAudioLevels = []; // Track recent audio levels for echo detection
+
+// Audio buffering for STT initialization
+let sttReady = false; // Track if STT is ready to receive audio
+let audioBuffer = []; // Buffer audio chunks until STT is ready
+const MAX_BUFFER_SIZE = 50; // Max chunks to buffer (~1 second at 16kHz)
+
+const connectBtn = document.getElementById('connectBtn');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusIndicator = document.getElementById('statusIndicator');
+const statusText = document.getElementById('statusText');
+const conversation = document.getElementById('conversation');
+const waveform = document.getElementById('waveform');
+
+// Connect to WebSocket
+connectBtn.addEventListener('click', () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}`;
+  
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    console.log('WebSocket connected');
+    setStatus('connected', '已連接');
+    connectBtn.disabled = true;
+    startBtn.disabled = false;
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    handleServerMessage(data);
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+    setStatus('disconnected', '連接錯誤');
+  };
+
+  ws.onclose = () => {
+    console.log('WebSocket closed');
+    setStatus('disconnected', '連接已斷開');
+    connectBtn.disabled = false;
+    startBtn.disabled = true;
+    stopBtn.disabled = true;
+  };
+});
+
+// Start conversation
+startBtn.addEventListener('click', async () => {
+  try {
+    // Reset STT state
+    sttReady = false;
+    audioBuffer = [];
+    console.log('[STT] Waiting for STT ready signal...');
+    
+    // Request microphone with aggressive echo cancellation
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,      // Remove speaker echo
+        noiseSuppression: true,       // Remove background noise
+        autoGainControl: true,        // Normalize volume
+        // Advanced: More aggressive echo cancellation
+        echoCancellationType: 'system' // Use system-level AEC if available
+      }
+    });
+
+    // Setup audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    let lastAudioLevel = 0;
+    let isSpeakingLocally = false;
+    
+    // Voice Activity Detection (VAD) Thresholds
+    // Adjust these if interruption is too sensitive or not sensitive enough:
+    // - SPEECH_THRESHOLD: Lower = more sensitive (detects quieter speech)
+    //   Default: 0.01 (works for normal speaking volume)
+    //   If you need to shout: try 0.005 or 0.003
+    //   If it triggers too easily: try 0.02 or 0.03
+    // - SILENCE_THRESHOLD: Should be lower than SPEECH_THRESHOLD
+    // 
+    // NOTE: Increased to 0.04 to prevent AI's echo from triggering interruption
+    // Echo cancellation reduces AI voice but doesn't eliminate it completely
+    const SPEECH_THRESHOLD = 0.04; // Higher to avoid echo false positives
+    const SILENCE_THRESHOLD = 0.008; // Scaled up proportionally
+    
+    processor.onaudioprocess = (e) => {
+      const inputData = e.inputBuffer.getChannelData(0);
+      
+      // Calculate audio level for visualization
+      let sum = 0;
+      for (let i = 0; i < inputData.length; i++) {
+        sum += Math.abs(inputData[i]);
+      }
+      const level = sum / inputData.length;
+      lastAudioLevel = level;
+      
+      // Update waveform visualization
+      updateWaveform(level);
+      
+      // Track recent audio levels for echo detection
+      recentAudioLevels.push(level);
+      if (recentAudioLevels.length > 10) {
+        recentAudioLevels.shift(); // Keep last 10 samples (~200ms)
+      }
+      
+      // Client-side VAD for interruption detection
+      // ONLY check for user speech when AI is speaking AND vadEnabled
+      // vadEnabled is delayed to let echo cancellation stabilize (prevents false interrupts)
+      if (isAISpeaking && vadEnabled) {
+        // AI is speaking - check if user wants to interrupt
+        if (!isSpeakingLocally && level > SPEECH_THRESHOLD) {
+          // Detected audio above threshold - but is it real speech or echo?
+          const timeSinceAudioStart = Date.now() - audioStartTime;
+          const avgRecentLevel = recentAudioLevels.reduce((a, b) => a + b, 0) / recentAudioLevels.length;
+          const isSuddenSpike = level > avgRecentLevel * 3; // More than 3x recent average
+          const isEarlyInAudio = timeSinceAudioStart < 1000; // First second of audio
+          
+          // If it's a sudden spike in the first second, it's likely echo - ignore it
+          if (isSuddenSpike && isEarlyInAudio) {
+            console.log('[VAD Client] ⚠️ Ignoring spike - likely echo (level: ' + level.toFixed(4) + ', time: ' + timeSinceAudioStart + 'ms)');
+          } else {
+            // Real user speech - interrupt AI!
+            isSpeakingLocally = true;
+            console.log('[VAD Client] 🎤 Speech detected while AI speaking (level: ' + level.toFixed(4) + ')');
+            console.log('[VAD Client] ⚡ Interrupting AI!');
+            setStatus('listening', '✋ 打斷緊...');
+            stopAudioPlayback();
+          }
+        } else if (isSpeakingLocally && level < SILENCE_THRESHOLD) {
+          // User stopped speaking
+          isSpeakingLocally = false;
+          console.log('[VAD Client] 🔇 Silence detected');
+        }
+      } else {
+        // AI is NOT speaking OR VAD not enabled - reset local speaking flag
+        // (Server-side VAD will handle turn-taking)
+        if (isSpeakingLocally && level < SILENCE_THRESHOLD) {
+          isSpeakingLocally = false;
+        }
+      }
+      
+      // Debug: Show audio level in console occasionally (every ~1 second)
+      if (Math.random() < 0.02) {
+        console.log('[Audio Level] ' + level.toFixed(4) + ' (threshold: ' + SPEECH_THRESHOLD + ')');
+      }
+
+      // Convert and send audio
+      const pcm16 = convertFloat32ToInt16(inputData);
+      const base64Audio = arrayBufferToBase64(pcm16.buffer);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        if (!sttReady) {
+          // STT not ready yet - buffer audio chunks
+          audioBuffer.push(base64Audio);
+          
+          // Prevent buffer overflow (keep last N chunks)
+          if (audioBuffer.length > MAX_BUFFER_SIZE) {
+            audioBuffer.shift(); // Remove oldest chunk
+          }
+          
+          // Log buffering status occasionally
+          if (Math.random() < 0.01) {
+            console.log('[STT] Buffering audio... (' + audioBuffer.length + ' chunks)');
+          }
+        } else {
+          // STT ready - send audio in real-time
+          ws.send(JSON.stringify({
+            type: 'audio',
+            audio: base64Audio
+          }));
+        }
+      }
+    };
+
+    // Start session
+    ws.send(JSON.stringify({ type: 'start' }));
+    
+    setStatus('listening', '聆聽中...');
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    waveform.style.display = 'flex';
+
+  } catch (error) {
+    console.error('Error starting:', error);
+    alert('無法存取麥克風。請確保已授權麥克風權限。');
+  }
+});
+
+// Stop conversation
+stopBtn.addEventListener('click', () => {
+  if (ws) {
+    ws.send(JSON.stringify({ type: 'stop' }));
+  }
+  stopAudioPlayback();
+  
+  // Stop audio context
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  
+  // Reset STT state
+  sttReady = false;
+  audioBuffer = [];
+  
+  setStatus('connected', '已停止');
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  waveform.style.display = 'none';
+});
+
+// Handle server messages
+function handleServerMessage(data) {
+  console.log('Server message:', data);
+
+  switch (data.type) {
+    case 'ready':
+      console.log('Agent ready');
+      break;
+    
+    case 'stt_ready':
+      // STT is ready to receive audio - flush buffered audio
+      console.log('[STT] ✅ STT ready - flushing ' + audioBuffer.length + ' buffered chunks');
+      sttReady = true;
+      
+      // Flush buffered audio chunks
+      while (audioBuffer.length > 0) {
+        const bufferedChunk = audioBuffer.shift();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'audio',
+            audio: bufferedChunk
+          }));
+        }
+      }
+      console.log('[STT] ✅ Buffer flushed, now streaming in real-time');
+      break;
+
+    case 'ai_response':
+      // Initial greeting (full response at once)
+      addMessage('ai', data.text);
+      queueAudio(data.audio, true);
+      break;
+
+    case 'transcript':
+      // User speech transcription
+      if (data.isFinal) {
+        addMessage('user', data.text);
+      } else {
+        updateInterimTranscript(data.text);
+      }
+      break;
+
+    case 'user_speech_start':
+      setStatus('listening', '🎤 你講緊嘢...');
+      break;
+
+    case 'user_speech_end':
+      setStatus('thinking', '諗緊...');
+      break;
+
+    case 'ai_thinking':
+      // Show AI thinking (streaming text)
+      updateAIThinking(data.current);
+      break;
+
+    case 'ai_audio_chunk':
+      // Streaming audio chunk
+      console.log('[Chunk] Received:', data.text);
+      
+      // Clear thinking message when first audio arrives
+      if (data.isFirst && thinkingMsg) {
+        thinkingMsg.remove();
+        thinkingMsg = null;
+      }
+      
+      // Add message on first chunk
+      if (data.isFirst) {
+        addMessage('ai', data.text);
+      } else {
+        // Append to last AI message
+        appendToLastAIMessage(data.text);
+      }
+      
+      // Queue audio for playback
+      queueAudio(data.audio, data.isFirst);
+      break;
+
+    case 'ai_response_complete':
+      setStatus('listening', '聆聽中...');
+      break;
+
+    case 'stop_playback':
+      // Interruption - stop current playback
+      console.log('[Interruption] ✋ Received stop_playback, stopping audio now (isPlaying=' + isPlaying + ')');
+      stopAudioPlayback();
+      
+      // Clear any AI thinking message
+      if (thinkingMsg) {
+        thinkingMsg.remove();
+        thinkingMsg = null;
+      }
+      
+      setStatus('listening', '🎤 你講緊嘢...');
+      console.log('[Interruption] ✅ Interruption complete, ready for new input');
+      break;
+
+    case 'error':
+      console.error('Error:', data.message);
+      addMessage('system', `錯誤：${data.message}`);
+      break;
+
+    case 'stopped':
+      console.log('Conversation stopped');
+      break;
+
+    case 'reset':
+      console.log('Session reset');
+      break;
+  }
+}
+
+// Add message to conversation
+function addMessage(role, text) {
+  // Clear placeholder
+  if (conversation.children.length === 1 && conversation.children[0].style.textAlign === 'center') {
+    conversation.innerHTML = '';
+  }
+
+  // Remove interim message if exists
+  const interimMsg = conversation.querySelector('.message.interim');
+  if (interimMsg) {
+    interimMsg.remove();
+  }
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${role}`;
+  messageDiv.dataset.text = text; // For deduplication
+  
+  const labelMap = {
+    user: '你',
+    ai: 'AI',
+    system: '系統'
+  };
+
+  messageDiv.innerHTML = `
+    <div class="message-label">${labelMap[role] || role}</div>
+    <div class="message-text">${text}</div>
+  `;
+  
+  conversation.appendChild(messageDiv);
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+// Add message only if not duplicate
+function addMessageIfNew(role, text) {
+  const lastMsg = conversation.querySelector(`.message.${role}:last-child`);
+  if (!lastMsg || lastMsg.dataset.text !== text) {
+    addMessage(role, text);
+  }
+}
+
+// Append text to last AI message
+function appendToLastAIMessage(text) {
+  const lastAIMsg = conversation.querySelector('.message.ai:last-child');
+  if (lastAIMsg && !lastAIMsg.classList.contains('interim')) {
+    const textDiv = lastAIMsg.querySelector('.message-text');
+    if (textDiv) {
+      textDiv.textContent += text;
+      lastAIMsg.dataset.text += text;
+    }
+  }
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+// Update interim transcript
+function updateInterimTranscript(text) {
+  let interimMsg = conversation.querySelector('.message.interim');
+  
+  if (!interimMsg) {
+    if (conversation.children.length === 1 && conversation.children[0].style.textAlign === 'center') {
+      conversation.innerHTML = '';
+    }
+
+    interimMsg = document.createElement('div');
+    interimMsg.className = 'message interim';
+    interimMsg.innerHTML = `
+      <div class="message-label">你 (講緊...)</div>
+      <div class="message-text">${text}</div>
+    `;
+    conversation.appendChild(interimMsg);
+  } else {
+    interimMsg.querySelector('.message-text').textContent = text;
+  }
+  
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+// Update AI thinking message
+let thinkingMsg = null;
+function updateAIThinking(text) {
+  if (!thinkingMsg) {
+    if (conversation.children.length === 1 && conversation.children[0].style.textAlign === 'center') {
+      conversation.innerHTML = '';
+    }
+
+    thinkingMsg = document.createElement('div');
+    thinkingMsg.className = 'message ai';
+    thinkingMsg.style.opacity = '0.7';
+    thinkingMsg.innerHTML = `
+      <div class="message-label">AI (諗緊...)</div>
+      <div class="message-text">${text}</div>
+    `;
+    conversation.appendChild(thinkingMsg);
+  } else {
+    thinkingMsg.querySelector('.message-text').textContent = text;
+  }
+  
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+// Queue audio chunk for playback
+function queueAudio(base64Audio, isFirst = false) {
+  console.log('[Queue] Adding audio chunk (queue size: ' + audioQueue.length + ')');
+  
+  audioQueue.push(base64Audio);
+  
+  // Start playing if this is the first chunk or nothing is playing
+  if (isFirst || !isPlaying) {
+    isAISpeaking = true;
+    playNextInQueue();
+  }
+}
+
+// Play next audio in queue
+function playNextInQueue() {
+  // Check if interrupted
+  if (!isAISpeaking || audioQueue.length === 0) {
+    console.log('[Queue] Empty or stopped');
+    isPlaying = false;
+    isAISpeaking = false;
+    vadEnabled = false; // Disable VAD when finished
+    recentAudioLevels = []; // Reset audio levels
+    audioStartTime = 0; // Reset start time
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ai_finished_speaking' }));
+    }
+    return;
+  }
+
+  const base64Audio = audioQueue.shift();
+  console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
+  
+  const audio = new Audio('data:audio/mp3;base64,' + base64Audio);
+  currentAudio = audio;
+  
+  audio.onplay = () => {
+    isPlaying = true;
+    audioStartTime = Date.now(); // Track when this audio chunk started
+    recentAudioLevels = []; // Reset recent levels for this new audio chunk
+    setStatus('speaking', 'AI講緊嘢...');
+    console.log('[Audio] ▶️ Playing (started at: ' + audioStartTime + ')');
+    
+    // Enable VAD after 300ms to let echo cancellation stabilize
+    // This prevents false interruptions from the first few milliseconds of audio
+    setTimeout(() => {
+      if (isAISpeaking && isPlaying) {
+        vadEnabled = true;
+        console.log('[VAD] ✅ Enabled (echo cancellation stabilized)');
+      }
+    }, 300); // 300ms warm-up time for echo cancellation
+  };
+
+  audio.onended = () => {
+    console.log('[Audio] ⏹️ Chunk ended');
+    isPlaying = false;
+    currentAudio = null;
+    thinkingMsg = null;
+    
+    // Play next in queue after a tiny delay
+    setTimeout(() => {
+      playNextInQueue();
+    }, 50); // 50ms gap between chunks
+  };
+
+  audio.onerror = (e) => {
+    console.error('[Audio] ❌ Error:', e);
+    isPlaying = false;
+    currentAudio = null;
+    // Try next in queue
+    setTimeout(() => playNextInQueue(), 100);
+  };
+
+  audio.play().catch(e => {
+    console.error('[Audio] ❌ Play failed:', e);
+    // Try next in queue
+    setTimeout(() => playNextInQueue(), 100);
+  });
+}
+
+// Stop audio playback (for interruption)
+function stopAudioPlayback() {
+  console.log('[Audio] ⏸️ STOPPING ALL AUDIO (queue: ' + audioQueue.length + ', playing: ' + isPlaying + ')');
+  
+  // Set flags FIRST to prevent new audio from playing
+  isAISpeaking = false;
+  isPlaying = false;
+  vadEnabled = false; // Disable VAD when stopping
+  audioQueue = []; // Clear entire queue
+  recentAudioLevels = []; // Reset audio levels
+  audioStartTime = 0; // Reset start time
+  
+  // AGGRESSIVELY stop current audio
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio.src = ''; // Clear source to force stop
+      currentAudio.load(); // Force reload to completely stop
+      console.log('[Audio] ✋ Current audio forcefully stopped');
+    } catch (e) {
+      console.error('[Audio] Error stopping:', e);
+    }
+    currentAudio = null;
+  }
+  
+  // Clear any AI thinking message
+  if (thinkingMsg) {
+    try {
+      thinkingMsg.remove();
+    } catch (e) {}
+    thinkingMsg = null;
+  }
+  
+  // Notify server that AI stopped speaking (interrupted)
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'ai_finished_speaking' }));
+  }
+  
+  console.log('[Audio] ✅ All audio stopped, queue cleared');
+}
+
+// Update waveform visualization
+function updateWaveform(level) {
+  const bars = waveform.querySelectorAll('.wave-bar');
+  const normalizedLevel = Math.min(level * 100, 1);
+  
+  bars.forEach((bar, i) => {
+    const height = 20 + (normalizedLevel * 40 * Math.sin(i * 0.5 + Date.now() * 0.01));
+    bar.style.height = `${height}px`;
+  });
+}
+
+// Set status
+function setStatus(status, text) {
+  statusIndicator.className = 'status-indicator ' + status;
+  statusText.textContent = text;
+}
+
+// Audio conversion utilities
+function convertFloat32ToInt16(buffer) {
+  const int16 = new Int16Array(buffer.length);
+  for (let i = 0; i < buffer.length; i++) {
+    const s = Math.max(-1, Math.min(1, buffer[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return int16;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Space bar for push-to-talk (future feature)
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    console.log('Push-to-talk (not yet implemented)');
+  }
+});
+
