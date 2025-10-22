@@ -14,6 +14,7 @@ let recentAudioLevels = []; // Track recent audio levels for echo detection
 let sttReady = false; // Track if STT is ready to receive audio
 let audioBuffer = []; // Buffer audio chunks until STT is ready
 const MAX_BUFFER_SIZE = 50; // Max chunks to buffer (~1 second at 16kHz)
+let allowAudioStreaming = false; // Don't stream audio until greeting finishes
 
 const connectBtn = document.getElementById('connectBtn');
 const startBtn = document.getElementById('startBtn');
@@ -68,6 +69,7 @@ startBtn.addEventListener('click', async () => {
     // Reset STT state
     sttReady = false;
     audioBuffer = [];
+    allowAudioStreaming = false; // Don't stream until greeting finishes
     console.log('[STT] Waiting for STT ready signal...');
     
     // iOS Audio Context Fix: Resume audio context on user gesture
@@ -187,6 +189,14 @@ startBtn.addEventListener('click', async () => {
       const base64Audio = arrayBufferToBase64(pcm16.buffer);
 
       if (ws && ws.readyState === WebSocket.OPEN) {
+        // Don't send audio until greeting finishes playing
+        if (!allowAudioStreaming) {
+          if (Math.random() < 0.01) {
+            console.log('[Audio] Waiting for greeting to finish before streaming...');
+          }
+          return;
+        }
+        
         if (!sttReady) {
           // STT not ready yet - buffer audio chunks
           audioBuffer.push(base64Audio);
@@ -240,6 +250,7 @@ stopBtn.addEventListener('click', () => {
   // Reset STT state
   sttReady = false;
   audioBuffer = [];
+  allowAudioStreaming = false;
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
@@ -278,6 +289,10 @@ function handleServerMessage(data) {
       // Initial greeting (full response at once)
       addMessage('ai', data.text);
       queueAudio(data.audio, true);
+      
+      // IMPORTANT: Mark as AI speaking to prevent echo detection during greeting
+      isAISpeaking = true;
+      console.log('[Greeting] AI speaking - VAD disabled until greeting finishes');
       break;
 
     case 'transcript':
@@ -459,13 +474,15 @@ function updateAIThinking(text) {
 
 // Queue audio chunk for playback
 function queueAudio(base64Audio, isFirst = false) {
-  console.log('[Queue] Adding audio chunk (queue size: ' + audioQueue.length + ')');
+  console.log('[Queue] Adding audio chunk (queue size: ' + audioQueue.length + ', isFirst: ' + isFirst + ')');
+  console.log('[Queue] Audio data length:', base64Audio ? base64Audio.length : 0);
   
   audioQueue.push(base64Audio);
   
   // Start playing if this is the first chunk or nothing is playing
   if (isFirst || !isPlaying) {
     isAISpeaking = true;
+    console.log('[Queue] Starting playback (isPlaying: ' + isPlaying + ', isAISpeaking: ' + isAISpeaking + ')');
     playNextInQueue();
   }
 }
@@ -518,6 +535,12 @@ function playNextInQueue() {
     currentAudio = null;
     thinkingMsg = null;
     
+    // If queue is empty, greeting/response is finished - allow audio streaming
+    if (audioQueue.length === 0) {
+      allowAudioStreaming = true;
+      console.log('[Audio] ✅ Audio finished - microphone streaming enabled');
+    }
+    
     // Play next in queue after a tiny delay
     setTimeout(() => {
       playNextInQueue();
@@ -528,12 +551,24 @@ function playNextInQueue() {
     console.error('[Audio] ❌ Error:', e);
     isPlaying = false;
     currentAudio = null;
+    
+    // Enable streaming even if audio fails
+    allowAudioStreaming = true;
+    console.log('[Audio] ⚠️ Audio error - microphone streaming enabled');
+    
     // Try next in queue
     setTimeout(() => playNextInQueue(), 100);
   };
 
   audio.play().catch(e => {
     console.error('[Audio] ❌ Play failed:', e);
+    console.error('[Audio] Error details:', e.name, e.message);
+    
+    // Enable streaming if play fails
+    allowAudioStreaming = true;
+    isPlaying = false;
+    currentAudio = null;
+    
     // Try next in queue
     setTimeout(() => playNextInQueue(), 100);
   });
