@@ -24,10 +24,28 @@ const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
 const waveform = document.getElementById('waveform');
 const mobileHint = document.getElementById('mobileHint');
+const debugLog = document.getElementById('debugLog');
+
+// Debug logging (visible on mobile)
+function debugMsg(msg) {
+  console.log(msg);
+  if (debugLog && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    debugLog.style.display = 'block';
+    const line = document.createElement('div');
+    line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    debugLog.appendChild(line);
+    debugLog.scrollTop = debugLog.scrollHeight;
+    // Keep last 10 lines
+    while (debugLog.children.length > 10) {
+      debugLog.removeChild(debugLog.firstChild);
+    }
+  }
+}
 
 // Show mobile hint if on mobile device
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   if (mobileHint) mobileHint.style.display = 'block';
+  debugMsg('📱 Mobile device detected');
 }
 
 // Connect to WebSocket
@@ -287,6 +305,7 @@ function handleServerMessage(data) {
 
     case 'ai_response':
       // Initial greeting (full response at once)
+      debugMsg('📥 Got greeting: ' + data.text.substring(0, 20));
       addMessage('ai', data.text);
       queueAudio(data.audio, true);
       
@@ -319,6 +338,7 @@ function handleServerMessage(data) {
 
     case 'ai_audio_chunk':
       // Streaming audio chunk
+      debugMsg('📥 Audio chunk: ' + data.text.substring(0, 15));
       console.log('[Chunk] Received:', data.text);
       
       // Clear thinking message when first audio arrives
@@ -474,14 +494,21 @@ function updateAIThinking(text) {
 
 // Queue audio chunk for playback
 function queueAudio(base64Audio, isFirst = false) {
+  debugMsg('🎵 Queue audio: ' + (base64Audio ? base64Audio.substring(0, 20) + '...' : 'NULL'));
   console.log('[Queue] Adding audio chunk (queue size: ' + audioQueue.length + ', isFirst: ' + isFirst + ')');
   console.log('[Queue] Audio data length:', base64Audio ? base64Audio.length : 0);
+  
+  if (!base64Audio || base64Audio.length === 0) {
+    debugMsg('❌ Empty audio data!');
+    return;
+  }
   
   audioQueue.push(base64Audio);
   
   // Start playing if this is the first chunk or nothing is playing
   if (isFirst || !isPlaying) {
     isAISpeaking = true;
+    debugMsg('▶️ Start playback');
     console.log('[Queue] Starting playback (isPlaying: ' + isPlaying + ', isAISpeaking: ' + isAISpeaking + ')');
     playNextInQueue();
   }
@@ -504,16 +531,20 @@ function playNextInQueue() {
   }
 
   const base64Audio = audioQueue.shift();
+  debugMsg('🔊 Playing chunk (' + audioQueue.length + ' left)');
   console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
   
-  const audio = new Audio('data:audio/mp3;base64,' + base64Audio);
+  // Create audio element
+  const audio = new Audio();
   currentAudio = audio;
   
+  // Set source AFTER adding event listeners (iOS requirement)
   audio.onplay = () => {
     isPlaying = true;
     audioStartTime = Date.now(); // Track when this audio chunk started
     recentAudioLevels = []; // Reset recent levels for this new audio chunk
     setStatus('speaking', 'AI講緊嘢...');
+    debugMsg('✅ Audio playing');
     console.log('[Audio] ▶️ Playing (started at: ' + audioStartTime + ')');
     
     // Enable VAD after delay to let echo cancellation stabilize
@@ -528,6 +559,18 @@ function playNextInQueue() {
       }
     }, vadDelay);
   };
+  
+  audio.oncanplay = () => {
+    debugMsg('✓ Audio can play');
+  };
+  
+  audio.onloadstart = () => {
+    debugMsg('⏳ Audio loading...');
+  };
+  
+  // Set source
+  audio.src = 'data:audio/mp3;base64,' + base64Audio;
+  audio.load(); // Explicitly load on iOS
 
   audio.onended = () => {
     console.log('[Audio] ⏹️ Chunk ended');
@@ -548,6 +591,7 @@ function playNextInQueue() {
   };
 
   audio.onerror = (e) => {
+    debugMsg('❌ Audio error: ' + (e.target.error ? e.target.error.message : 'unknown'));
     console.error('[Audio] ❌ Error:', e);
     isPlaying = false;
     currentAudio = null;
@@ -560,7 +604,9 @@ function playNextInQueue() {
     setTimeout(() => playNextInQueue(), 100);
   };
 
+  // Try to play
   audio.play().catch(e => {
+    debugMsg('❌ Play failed: ' + e.message);
     console.error('[Audio] ❌ Play failed:', e);
     console.error('[Audio] Error details:', e.name, e.message);
     
