@@ -8,7 +8,9 @@ let speechClient;
 
 if (process.env.GOOGLE_CREDENTIALS_JSON) {
   // Production (Fly.io) - credentials from environment variable
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+  // Strip BOM (Byte Order Mark) if present
+  const jsonString = process.env.GOOGLE_CREDENTIALS_JSON.replace(/^\uFEFF/, '');
+  const credentials = JSON.parse(jsonString);
   speechClient = new speech.SpeechClient({
     credentials: credentials,
     projectId: credentials.project_id
