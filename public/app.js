@@ -620,26 +620,41 @@ function playNextInQueue() {
   
   // Set source using Blob URL (iOS requirement - data URIs often fail)
   try {
-    debugMsg('Setting src (len: ' + base64Audio.length + ')');
+    debugMsg('Setting src (base64 len: ' + base64Audio.length + ')');
+    
+    // Validate base64
+    if (!base64Audio || base64Audio.length < 100) {
+      debugMsg('❌ Invalid audio data');
+      throw new Error('Audio data too short or empty');
+    }
     
     // Convert base64 to Blob
     const binaryString = atob(base64Audio);
+    debugMsg('✓ Base64 decoded (' + binaryString.length + ' bytes)');
+    
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    const blob = new Blob([bytes], { type: 'audio/mpeg' });
-    const blobUrl = URL.createObjectURL(blob);
+    debugMsg('✓ Created byte array');
     
-    debugMsg('✓ Created blob URL');
+    // Try multiple MIME types for iOS compatibility
+    const blob = new Blob([bytes.buffer], { type: 'audio/mp3' });
+    debugMsg('✓ Created blob (' + blob.size + ' bytes, type: ' + blob.type + ')');
+    
+    const blobUrl = URL.createObjectURL(blob);
+    debugMsg('✓ Created blob URL: ' + blobUrl.substring(0, 30) + '...');
     
     // Store blob URL for cleanup
     audio.dataset.blobUrl = blobUrl;
     
     audio.src = blobUrl;
+    debugMsg('✓ Set audio.src');
+    
     audio.load(); // Explicitly load on iOS
+    debugMsg('✓ Called audio.load()');
   } catch (e) {
-    debugMsg('❌ Error setting src: ' + e.message);
+    debugMsg('❌ Error: ' + e.message);
     console.error('[Audio] Error creating blob:', e);
   }
 

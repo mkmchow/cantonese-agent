@@ -34,7 +34,7 @@ export async function synthesizeSpeech(text) {
       VoiceId: 'Hiujin', // Cantonese female voice
       Engine: 'neural',
       LanguageCode: 'yue-CN',
-      SampleRate: '16000'
+      SampleRate: '24000' // Changed from 16000 for better iOS compatibility
     });
 
     const response = await pollyClient.send(command);

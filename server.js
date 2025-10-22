@@ -102,6 +102,8 @@ wss.on('connection', (ws) => {
       // Mark AI as speaking (for greeting)
       isAISpeaking = true;
       
+      console.log(`[Greeting] Sending audio: ${audio.length} chars (base64)`);
+      
       ws.send(JSON.stringify({
         type: 'ai_response',
         text: greeting,
