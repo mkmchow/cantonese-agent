@@ -1,34 +1,22 @@
-# Fly.io Configuration for 喂喂機 (WeiWei Voice Agent)
+# fly.toml app configuration file generated for cantonese-agent on 2025-10-22T18:44:47Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "weiweiji"
-primary_region = "hkg"  # Hong Kong region for lowest latency
+app = 'cantonese-agent'
+primary_region = 'hkg'
 
 [build]
-
-[env]
-  PORT = "3001"
-  NODE_ENV = "production"
 
 [http_service]
   internal_port = 3001
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-  processes = ["app"]
-
-  [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    timeout = "5s"
-    path = "/health"
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 512
-
-# Allow WebSocket connections
-[mounts]
-
