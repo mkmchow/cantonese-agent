@@ -610,9 +610,22 @@ function playNextInQueue() {
     debugMsg('⏳ Audio loading...');
   };
   
+  audio.onloadeddata = () => {
+    debugMsg('✓ Audio data loaded');
+  };
+  
+  audio.onstalled = () => {
+    debugMsg('⚠️ Audio stalled');
+  };
+  
   // Set source
-  audio.src = 'data:audio/mp3;base64,' + base64Audio;
-  audio.load(); // Explicitly load on iOS
+  try {
+    debugMsg('Setting src (len: ' + base64Audio.length + ')');
+    audio.src = 'data:audio/mp3;base64,' + base64Audio;
+    audio.load(); // Explicitly load on iOS
+  } catch (e) {
+    debugMsg('❌ Error setting src: ' + e.message);
+  }
 
   audio.onended = () => {
     console.log('[Audio] ⏹️ Chunk ended');
@@ -640,8 +653,13 @@ function playNextInQueue() {
   };
 
   audio.onerror = (e) => {
-    debugMsg('❌ Audio error: ' + (e.target.error ? e.target.error.message : 'unknown'));
+    const errorCode = e.target.error ? e.target.error.code : 'unknown';
+    const errorMsg = e.target.error ? e.target.error.message : 'unknown';
+    debugMsg('❌ Audio error: code=' + errorCode + ', msg=' + errorMsg);
     console.error('[Audio] ❌ Error:', e);
+    console.error('[Audio] Error code:', errorCode);
+    console.error('[Audio] Error message:', errorMsg);
+    console.error('[Audio] Audio src length:', audio.src ? audio.src.length : 0);
     isPlaying = false;
     
     // Return to pool even on error
