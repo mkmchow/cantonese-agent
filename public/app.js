@@ -618,18 +618,40 @@ function playNextInQueue() {
     debugMsg('⚠️ Audio stalled');
   };
   
-  // Set source
+  // Set source using Blob URL (iOS requirement - data URIs often fail)
   try {
     debugMsg('Setting src (len: ' + base64Audio.length + ')');
-    audio.src = 'data:audio/mp3;base64,' + base64Audio;
+    
+    // Convert base64 to Blob
+    const binaryString = atob(base64Audio);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    const blobUrl = URL.createObjectURL(blob);
+    
+    debugMsg('✓ Created blob URL');
+    
+    // Store blob URL for cleanup
+    audio.dataset.blobUrl = blobUrl;
+    
+    audio.src = blobUrl;
     audio.load(); // Explicitly load on iOS
   } catch (e) {
     debugMsg('❌ Error setting src: ' + e.message);
+    console.error('[Audio] Error creating blob:', e);
   }
 
   audio.onended = () => {
     console.log('[Audio] ⏹️ Chunk ended');
     isPlaying = false;
+    
+    // Clean up blob URL
+    if (audio.dataset.blobUrl) {
+      URL.revokeObjectURL(audio.dataset.blobUrl);
+      delete audio.dataset.blobUrl;
+    }
     
     // Return audio element to pool for reuse
     audio.src = '';
@@ -662,6 +684,12 @@ function playNextInQueue() {
     console.error('[Audio] Audio src length:', audio.src ? audio.src.length : 0);
     isPlaying = false;
     
+    // Clean up blob URL
+    if (audio.dataset.blobUrl) {
+      URL.revokeObjectURL(audio.dataset.blobUrl);
+      delete audio.dataset.blobUrl;
+    }
+    
     // Return to pool even on error
     audio.src = '';
     audio.load();
@@ -682,6 +710,12 @@ function playNextInQueue() {
     debugMsg('❌ Play failed: ' + e.message);
     console.error('[Audio] ❌ Play failed:', e);
     console.error('[Audio] Error details:', e.name, e.message);
+    
+    // Clean up blob URL
+    if (audio.dataset.blobUrl) {
+      URL.revokeObjectURL(audio.dataset.blobUrl);
+      delete audio.dataset.blobUrl;
+    }
     
     // Return to pool even on play failure
     audio.src = '';
@@ -715,6 +749,13 @@ function stopAudioPlayback() {
     try {
       currentAudio.pause();
       currentAudio.currentTime = 0;
+      
+      // Clean up blob URL
+      if (currentAudio.dataset.blobUrl) {
+        URL.revokeObjectURL(currentAudio.dataset.blobUrl);
+        delete currentAudio.dataset.blobUrl;
+      }
+      
       currentAudio.src = ''; // Clear source to force stop
       currentAudio.load(); // Force reload to completely stop
       console.log('[Audio] ✋ Current audio forcefully stopped');
