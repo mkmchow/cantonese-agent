@@ -25,7 +25,6 @@ const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
 const waveform = document.getElementById('waveform');
-const mobileHint = document.getElementById('mobileHint');
 const debugLog = document.getElementById('debugLog');
 
 // Debug logging (visible on mobile)
@@ -44,9 +43,8 @@ function debugMsg(msg) {
   }
 }
 
-// Show mobile hint if on mobile device
+// Log mobile device detection
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-  if (mobileHint) mobileHint.style.display = 'block';
   debugMsg('📱 Mobile device detected');
 }
 
