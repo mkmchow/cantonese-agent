@@ -10,8 +10,6 @@ let vadEnabled = false; // Only enable VAD after echo cancellation stabilizes
 let audioStartTime = 0; // Track when audio started
 let recentAudioLevels = []; // Track recent audio levels for echo detection
 let audioUnlocked = false; // Track if iOS audio is unlocked
-let audioPool = []; // Pool of pre-created audio elements for iOS
-let preloadedAudio = null; // Pre-created audio element for iOS
 
 // Audio buffering for STT initialization
 let sttReady = false; // Track if STT is ready to receive audio
@@ -104,27 +102,17 @@ startBtn.addEventListener('click', async () => {
       console.log('[Audio] AudioContext resumed for iOS');
     }
     
-    // iOS Audio Unlock: Create audio elements during user gesture
+    // iOS Audio Unlock: Play silent audio to unlock audio playback
     if (!audioUnlocked) {
       try {
         debugMsg('🔓 Unlocking iOS audio...');
-        
-        // Method 1: Play silent audio to unlock
         const silentAudio = new Audio();
         silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S/5VEkAAAAAAD/+xDEAAP8AAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxA8DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
         silentAudio.volume = 0.01;
         await silentAudio.play();
-        
-        // Method 2: Pre-create audio element pool (iOS allows these to play)
-        for (let i = 0; i < 3; i++) {
-          const audio = new Audio();
-          audio.volume = 1.0;
-          audioPool.push(audio);
-        }
-        
         audioUnlocked = true;
         debugMsg('✅ iOS audio unlocked');
-        console.log('[Audio] iOS audio unlocked, created ' + audioPool.length + ' audio elements');
+        console.log('[Audio] iOS audio unlocked');
       } catch (e) {
         debugMsg('⚠️ Audio unlock failed: ' + e.message);
         console.warn('[Audio] Failed to unlock:', e);
@@ -300,7 +288,6 @@ stopBtn.addEventListener('click', () => {
   audioBuffer = [];
   allowAudioStreaming = false;
   audioUnlocked = false; // Reset iOS audio unlock
-  audioPool = []; // Clear audio pool
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
@@ -566,18 +553,8 @@ function playNextInQueue() {
   debugMsg('🔊 Playing chunk (' + audioQueue.length + ' left)');
   console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
   
-  // Use pre-created audio element from pool (iOS requirement)
-  // iOS only allows Audio elements created during user gesture to play
-  let audio;
-  if (audioPool.length > 0) {
-    audio = audioPool.shift();
-    debugMsg('✓ Using pooled audio element');
-    console.log('[Audio] Using pre-created audio element from pool');
-  } else {
-    audio = new Audio();
-    debugMsg('⚠️ Creating new audio (pool empty)');
-    console.log('[Audio] Pool empty, creating new audio element');
-  }
+  // Create fresh audio element (iOS unlock happened on button click)
+  const audio = new Audio();
   currentAudio = audio;
   
   // Set source AFTER adding event listeners (iOS requirement)
@@ -662,17 +639,11 @@ function playNextInQueue() {
     console.log('[Audio] ⏹️ Chunk ended');
     isPlaying = false;
     
-    // Clean up blob URL
+    // Clean up blob URL to prevent memory leak
     if (audio.dataset.blobUrl) {
       URL.revokeObjectURL(audio.dataset.blobUrl);
       delete audio.dataset.blobUrl;
     }
-    
-    // Return audio element to pool for reuse
-    audio.src = '';
-    audio.load();
-    audioPool.push(audio);
-    debugMsg('♻️ Returned to pool (' + audioPool.length + ')');
     
     currentAudio = null;
     thinkingMsg = null;
@@ -705,11 +676,6 @@ function playNextInQueue() {
       delete audio.dataset.blobUrl;
     }
     
-    // Return to pool even on error
-    audio.src = '';
-    audio.load();
-    audioPool.push(audio);
-    
     currentAudio = null;
     
     // Enable streaming even if audio fails
@@ -731,11 +697,6 @@ function playNextInQueue() {
       URL.revokeObjectURL(audio.dataset.blobUrl);
       delete audio.dataset.blobUrl;
     }
-    
-    // Return to pool even on play failure
-    audio.src = '';
-    audio.load();
-    audioPool.push(audio);
     
     // Enable streaming if play fails
     allowAudioStreaming = true;
