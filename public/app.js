@@ -10,6 +10,7 @@ let vadEnabled = false; // Only enable VAD after echo cancellation stabilizes
 let audioStartTime = 0; // Track when audio started
 let recentAudioLevels = []; // Track recent audio levels for echo detection
 let audioUnlocked = false; // Track if iOS audio is unlocked
+let permanentAudio = null; // Single reusable audio element created during user gesture
 
 // Audio buffering for STT initialization
 let sttReady = false; // Track if STT is ready to receive audio
@@ -102,17 +103,24 @@ startBtn.addEventListener('click', async () => {
       console.log('[Audio] AudioContext resumed for iOS');
     }
     
-    // iOS Audio Unlock: Play silent audio to unlock audio playback
+    // iOS Audio Unlock: Create permanent audio element during user gesture
     if (!audioUnlocked) {
       try {
         debugMsg('🔓 Unlocking iOS audio...');
+        
+        // Create the permanent audio element HERE (during user gesture)
+        permanentAudio = new Audio();
+        permanentAudio.volume = 1.0;
+        
+        // Play silent audio to unlock
         const silentAudio = new Audio();
         silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S/5VEkAAAAAAD/+xDEAAP8AAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxA8DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
         silentAudio.volume = 0.01;
         await silentAudio.play();
+        
         audioUnlocked = true;
-        debugMsg('✅ iOS audio unlocked');
-        console.log('[Audio] iOS audio unlocked');
+        debugMsg('✅ iOS audio unlocked + permanent audio created');
+        console.log('[Audio] iOS audio unlocked, permanent audio element created');
       } catch (e) {
         debugMsg('⚠️ Audio unlock failed: ' + e.message);
         console.warn('[Audio] Failed to unlock:', e);
@@ -288,6 +296,7 @@ stopBtn.addEventListener('click', () => {
   audioBuffer = [];
   allowAudioStreaming = false;
   audioUnlocked = false; // Reset iOS audio unlock
+  permanentAudio = null; // Clear permanent audio element
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
@@ -553,8 +562,20 @@ function playNextInQueue() {
   debugMsg('🔊 Playing chunk (' + audioQueue.length + ' left)');
   console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
   
-  // Create fresh audio element (iOS unlock happened on button click)
-  const audio = new Audio();
+  // Use permanent audio element (created during user gesture for iOS)
+  const audio = permanentAudio || new Audio();
+  
+  // Clean up old blob URL if exists
+  if (audio.dataset.blobUrl) {
+    URL.revokeObjectURL(audio.dataset.blobUrl);
+    delete audio.dataset.blobUrl;
+  }
+  
+  // Reset audio element for reuse
+  audio.pause();
+  audio.currentTime = 0;
+  audio.src = '';
+  
   currentAudio = audio;
   
   // Set source AFTER adding event listeners (iOS requirement)
