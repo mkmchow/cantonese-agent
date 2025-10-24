@@ -202,9 +202,9 @@ startBtn.addEventListener('click', async () => {
       }
       
       // Client-side VAD for interruption detection
-      // ONLY check for user speech when AI is speaking AND vadEnabled
+      // ONLY check for user speech when AI is speaking AND vadEnabled AND NOT muted
       // vadEnabled is delayed to let echo cancellation stabilize (prevents false interrupts)
-      if (isAISpeaking && vadEnabled) {
+      if (isAISpeaking && vadEnabled && !isMuted) {
         // AI is speaking - check if user wants to interrupt
         if (!isSpeakingLocally && level > SPEECH_THRESHOLD) {
           // Detected audio above threshold - but is it real speech or echo?
