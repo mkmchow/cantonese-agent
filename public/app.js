@@ -104,17 +104,24 @@ startBtn.addEventListener('click', async () => {
       console.log('[Audio] AudioContext resumed for iOS');
     }
     
-    // iOS Audio Unlock: Play silent audio on user gesture
+    // iOS Audio Unlock: Create permanent audio element during user gesture
     if (!audioUnlocked) {
       try {
         debugMsg('🔓 Unlocking iOS audio...');
+        
+        // Create the permanent audio element HERE (during user gesture)
+        preloadedAudio = new Audio();
+        preloadedAudio.volume = 1.0;
+        
+        // Play silent audio to unlock
         const silentAudio = new Audio();
         silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S/5VEkAAAAAAD/+xDEAAP8AAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxA8DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
         silentAudio.volume = 0.01;
         await silentAudio.play();
+        
         audioUnlocked = true;
-        debugMsg('✅ iOS audio unlocked');
-        console.log('[Audio] iOS audio unlocked');
+        debugMsg('✅ iOS audio unlocked + permanent audio created');
+        console.log('[Audio] iOS audio unlocked, permanent audio element created');
       } catch (e) {
         debugMsg('⚠️ Audio unlock failed: ' + e.message);
         console.warn('[Audio] Failed to unlock:', e);
@@ -295,6 +302,7 @@ stopBtn.addEventListener('click', () => {
   audioBuffer = [];
   allowAudioStreaming = false;
   audioUnlocked = false; // Reset iOS audio unlock
+  preloadedAudio = null; // Clear permanent audio element
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
@@ -568,8 +576,13 @@ function playNextInQueue() {
   debugMsg('🔊 Playing chunk (' + audioQueue.length + ' left)');
   console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
   
-  // Create audio element
-  const audio = new Audio();
+  // Use permanent audio element (created during user gesture for iOS)
+  const audio = preloadedAudio || new Audio();
+  
+  // Reset audio element for reuse
+  audio.pause();
+  audio.currentTime = 0;
+  
   currentAudio = audio;
   
   // Set source AFTER adding event listeners (iOS requirement)
