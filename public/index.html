@@ -207,6 +207,37 @@
       padding: 10px;
     }
 
+    .model-select:disabled {
+      background: #f5f5f5;
+      color: #999;
+      cursor: not-allowed;
+      border-color: #ddd;
+    }
+
+    .toggle-config-btn {
+      width: calc(100% - 40px);
+      margin: 0 20px 15px;
+      padding: 12px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-config-btn:hover {
+      background: #5568d3;
+    }
+
+    @media (min-width: 768px) {
+      .toggle-config-btn {
+        display: none !important;
+      }
+    }
+
     .personality-section {
       padding: 20px 20px;
       background: white;
@@ -490,6 +521,9 @@
       </div>
     </div>
 
+    <button id="toggleConfigBtn" class="toggle-config-btn" style="display: none;">⬇️ 顯示設定</button>
+
+    <div id="configSections">
     <div class="model-selector">
       <label for="modelSelect">
         <span style="font-size: 14px; color: #666;">🤖 AI Model:</span>
@@ -520,6 +554,7 @@
         class="personality-input" 
         placeholder="例如：你好有耐性，鍾意用簡單嘅例子解釋嘢、你識好多香港文化..."
       ></textarea>
+    </div>
     </div>
 
     <div class="controls">

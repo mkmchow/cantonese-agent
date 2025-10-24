@@ -29,6 +29,8 @@ const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
 const roleInput = document.getElementById('roleInput');
 const personalityInput = document.getElementById('personalityInput');
+const toggleConfigBtn = document.getElementById('toggleConfigBtn');
+const configSections = document.getElementById('configSections');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
@@ -88,9 +90,13 @@ connectBtn.addEventListener('click', () => {
     connectBtn.disabled = false;
     startBtn.disabled = true;
     stopBtn.disabled = true;
-    // Re-enable role and personality inputs when disconnected
+    // Re-enable configuration inputs when disconnected
+    modelSelect.disabled = false;
     roleInput.disabled = false;
     personalityInput.disabled = false;
+    // Show config sections and hide toggle button
+    configSections.style.display = 'block';
+    toggleConfigBtn.style.display = 'none';
   };
 });
 
@@ -330,9 +336,14 @@ startBtn.addEventListener('click', async () => {
     muteBtn.disabled = false;
     stopBtn.disabled = false;
     waveform.style.display = 'flex';
-    // Disable role and personality inputs during conversation
+    // Disable configuration inputs during conversation
+    modelSelect.disabled = true;
     roleInput.disabled = true;
     personalityInput.disabled = true;
+    // Hide config sections on mobile to save screen space
+    configSections.style.display = 'none';
+    toggleConfigBtn.textContent = '⬇️ 顯示設定';
+    toggleConfigBtn.style.display = 'block';
 
   } catch (error) {
     console.error('Error starting:', error);
@@ -372,9 +383,13 @@ stopBtn.addEventListener('click', () => {
   muteBtn.classList.add('btn-secondary');
   stopBtn.disabled = true;
   waveform.style.display = 'none';
-  // Re-enable role and personality inputs when stopped
+  // Re-enable configuration inputs when stopped
+  modelSelect.disabled = false;
   roleInput.disabled = false;
   personalityInput.disabled = false;
+  // Show config sections and hide toggle button
+  configSections.style.display = 'block';
+  toggleConfigBtn.style.display = 'none';
 });
 
 // Mute/Unmute microphone
@@ -410,6 +425,13 @@ muteBtn.addEventListener('click', () => {
     // Reset the spoken flag for the new turn
     userHasSpokenThisTurn = false;
   }
+});
+
+// Toggle configuration sections visibility
+toggleConfigBtn.addEventListener('click', () => {
+  const isHidden = configSections.style.display === 'none';
+  configSections.style.display = isHidden ? 'block' : 'none';
+  toggleConfigBtn.textContent = isHidden ? '⬆️ 隱藏設定' : '⬇️ 顯示設定';
 });
 
 // Handle server messages
