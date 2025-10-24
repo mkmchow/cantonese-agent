@@ -67,7 +67,7 @@ export async function generateStreamingResponse(conversationHistory, onChunk, on
 
   } catch (error) {
     console.error('[LLM] ❌ Error generating response:');
-    console.error('[LLM] Model:', selectedModel);
+    console.error('[LLM] Model:', model || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini');
     console.error('[LLM] Error message:', error.message);
     console.error('[LLM] Error response:', error.response?.data || 'No response data');
     console.error('[LLM] Full error:', error);
