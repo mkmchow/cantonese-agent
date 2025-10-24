@@ -191,9 +191,23 @@ wss.on('connection', (ws) => {
           confidence: confidence
         }));
 
-        // Process final transcript
-        if (isFinal && confidence > 0.5 && transcript.trim()) {
-          processUserMessage(transcript);
+        // Handle final transcript
+        if (isFinal) {
+          const trimmedTranscript = transcript.trim();
+          
+          // Check if transcript is valid (not empty and reasonable confidence)
+          if (trimmedTranscript && confidence > 0.5) {
+            // Valid transcript - process it
+            processUserMessage(trimmedTranscript);
+          } else if (trimmedTranscript && confidence <= 0.5) {
+            // Low confidence - ask for clarification
+            console.log(`[STT] ⚠️ Low confidence (${confidence.toFixed(2)}) for: "${trimmedTranscript}"`);
+            sendClarificationRequest("我聽唔清楚，可唔可以再講一次？");
+          } else {
+            // Empty transcript - likely recognition failure
+            console.log('[STT] ⚠️ Empty transcript received - asking user to speak again');
+            sendClarificationRequest("唔好意思，我冇聽到你講嘢。可以再講一次嗎？");
+          }
         }
       },
       // onSpeechStart
@@ -291,6 +305,36 @@ wss.on('connection', (ws) => {
         type: 'stop_playback',
         reason: 'interrupted'
       }));
+    }
+  }
+
+  // Send clarification request (without LLM processing)
+  async function sendClarificationRequest(message) {
+    try {
+      console.log(`[Clarification] Sending: "${message}"`);
+      
+      // Mark AI as speaking
+      isAISpeaking = true;
+      
+      // Synthesize the clarification message
+      const audio = await synthesizeSpeechBase64(message, isMobile);
+      
+      ws.send(JSON.stringify({
+        type: 'ai_audio_chunk',
+        text: message,
+        audio: audio,
+        isFirst: true,
+        isFinal: true
+      }));
+      
+      // Add to conversation history
+      if (conversation) {
+        conversation.addMessage('assistant', message);
+      }
+      
+      console.log('[Clarification] ✅ Sent clarification request');
+    } catch (error) {
+      console.error('[Clarification] Error:', error);
     }
   }
 
