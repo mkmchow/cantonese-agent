@@ -44,6 +44,7 @@ wss.on('connection', (ws) => {
   let isProcessing = false;
   let currentResponseId = null; // Track response ID to cancel properly
   let selectedModel = 'openai/gpt-4o-mini'; // Default model
+  let isMobile = false; // Track if client is mobile for optimizations
 
   // State management
   ws.on('message', async (message) => {
@@ -63,6 +64,13 @@ wss.on('connection', (ws) => {
               model: selectedModel
             }));
           }
+          
+          // Store mobile flag for optimizations
+          if (data.isMobile !== undefined) {
+            isMobile = data.isMobile;
+            console.log(`[Session ${sessionId}] 📱 Mobile device: ${isMobile}`);
+          }
+          
           handleStart();
           break;
 
@@ -110,7 +118,7 @@ wss.on('connection', (ws) => {
     const greeting = '你好！我係你嘅AI助手，可以用廣東話同你傾偈。有咩可以幫到你？';
     conversation.addMessage('assistant', greeting);
     
-    synthesizeSpeechBase64(greeting).then(audio => {
+    synthesizeSpeechBase64(greeting, isMobile).then(audio => {
       // Mark AI as speaking (for greeting)
       isAISpeaking = true;
       
@@ -330,7 +338,7 @@ wss.on('connection', (ws) => {
               console.log(`[TTS] Chunk ${thisSentenceNum}: "${sentence}"`);
               
               // Synthesize and send immediately
-              synthesizeSpeechBase64(sentence).then(audio => {
+              synthesizeSpeechBase64(sentence, isMobile).then(audio => {
                 // Check if this response was cancelled
                 if (currentResponseId !== responseId) {
                   console.log(`[TTS] Chunk ${thisSentenceNum} discarded (interrupted)`);
@@ -365,7 +373,7 @@ wss.on('connection', (ws) => {
             const finalSentenceNum = sentenceCount;
             const finalText = sentenceBuffer.trim();
             console.log(`[TTS] Final chunk: "${finalText}"`);
-            synthesizeSpeechBase64(finalText).then(audio => {
+            synthesizeSpeechBase64(finalText, isMobile).then(audio => {
               // Check if this response was cancelled
               if (currentResponseId !== responseId) {
                 console.log(`[TTS] Final chunk discarded (interrupted)`);
@@ -390,7 +398,8 @@ wss.on('connection', (ws) => {
             });
           }
         },
-        selectedModel // Pass the selected model
+        selectedModel, // Pass the selected model
+        isMobile // Pass mobile flag for optimizations
       );
 
       // Add to conversation history

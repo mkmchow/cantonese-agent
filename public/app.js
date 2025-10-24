@@ -143,17 +143,23 @@ startBtn.addEventListener('click', async () => {
 
     // Setup audio processing
     const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    
+    // Detect mobile device for optimizations
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    console.log('[Device] Mobile detected:', isMobile);
+    
+    // Mobile optimization: Use larger buffer to reduce network overhead
+    // Desktop: 4096 samples = 256ms @ 16kHz (sends ~4 times/sec)
+    // Mobile: 8192 samples = 512ms @ 16kHz (sends ~2 times/sec)
+    const bufferSize = isMobile ? 8192 : 4096;
+    const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+    console.log('[Audio] Buffer size:', bufferSize, 'samples (' + (bufferSize/16) + 'ms)');
 
     source.connect(processor);
     processor.connect(audioContext.destination);
 
     let lastAudioLevel = 0;
     let isSpeakingLocally = false;
-    
-    // Detect mobile device for adjusted VAD settings
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    console.log('[Device] Mobile detected:', isMobile);
     
     // Voice Activity Detection (VAD) Thresholds
     // Adjust these if interruption is too sensitive or not sensitive enough:
@@ -165,8 +171,10 @@ startBtn.addEventListener('click', async () => {
     // 
     // NOTE: Increased to 0.04 to prevent AI's echo from triggering interruption
     // Echo cancellation reduces AI voice but doesn't eliminate it completely
-    const SPEECH_THRESHOLD = 0.04; // Higher to avoid echo false positives
-    const SILENCE_THRESHOLD = 0.008; // Scaled up proportionally
+    // Mobile: Lower threshold since mobile mics are quieter
+    const SPEECH_THRESHOLD = isMobile ? 0.03 : 0.04; // Lower for mobile
+    const SILENCE_THRESHOLD = isMobile ? 0.006 : 0.008; // Lower for mobile
+    console.log('[VAD] Thresholds - Speech:', SPEECH_THRESHOLD, 'Silence:', SILENCE_THRESHOLD);
     
     processor.onaudioprocess = (e) => {
       const inputData = e.inputBuffer.getChannelData(0);
@@ -265,12 +273,14 @@ startBtn.addEventListener('click', async () => {
       }
     };
 
-    // Start session with selected model
+    // Start session with selected model and device info
     const selectedModel = modelSelect.value;
     console.log('[Model] Selected model:', selectedModel);
+    console.log('[Device] Sending mobile flag:', isMobile);
     ws.send(JSON.stringify({ 
       type: 'start',
-      model: selectedModel 
+      model: selectedModel,
+      isMobile: isMobile // Send mobile flag for server-side optimizations
     }));
     
     setStatus('listening', '聆聽中...');

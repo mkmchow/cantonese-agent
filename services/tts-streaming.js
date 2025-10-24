@@ -15,17 +15,23 @@ const audioCache = new Map();
 /**
  * Synthesize Cantonese speech (with caching)
  * @param {string} text - Text to synthesize
+ * @param {boolean} isMobile - Whether client is mobile (for optimization)
  * @returns {Promise<Buffer>} - Audio buffer (MP3)
  */
-export async function synthesizeSpeech(text) {
+export async function synthesizeSpeech(text, isMobile = false) {
   // Check cache first
-  if (audioCache.has(text)) {
-    console.log(`[TTS] 💾 Cache hit: "${text}"`);
-    return audioCache.get(text);
+  const cacheKey = `${text}_${isMobile ? 'mobile' : 'desktop'}`;
+  if (audioCache.has(cacheKey)) {
+    console.log(`[TTS] 💾 Cache hit: "${text}" (mobile: ${isMobile})`);
+    return audioCache.get(cacheKey);
   }
 
   try {
-    console.log(`[TTS] 🔊 Synthesizing: "${text}"`);
+    // Mobile optimization: Use lower sample rate for faster transfer
+    // Desktop: 24kHz for quality
+    // Mobile: 16kHz for speed (50% smaller file size)
+    const sampleRate = isMobile ? '16000' : '24000';
+    console.log(`[TTS] 🔊 Synthesizing: "${text}" (${sampleRate}Hz, mobile: ${isMobile})`);
     const startTime = Date.now();
 
     const command = new SynthesizeSpeechCommand({
@@ -34,7 +40,7 @@ export async function synthesizeSpeech(text) {
       VoiceId: 'Hiujin', // Cantonese female voice
       Engine: 'neural',
       LanguageCode: 'yue-CN',
-      SampleRate: '24000' // Changed from 16000 for better iOS compatibility
+      SampleRate: sampleRate
     });
 
     const response = await pollyClient.send(command);
@@ -51,7 +57,7 @@ export async function synthesizeSpeech(text) {
 
     // Cache if short (likely to repeat)
     if (text.length <= 30) {
-      audioCache.set(text, audioBuffer);
+      audioCache.set(cacheKey, audioBuffer);
     }
 
     return audioBuffer;
@@ -65,10 +71,11 @@ export async function synthesizeSpeech(text) {
 /**
  * Synthesize and return as base64
  * @param {string} text
+ * @param {boolean} isMobile - Whether client is mobile (for optimization)
  * @returns {Promise<string>}
  */
-export async function synthesizeSpeechBase64(text) {
-  const buffer = await synthesizeSpeech(text);
+export async function synthesizeSpeechBase64(text, isMobile = false) {
+  const buffer = await synthesizeSpeech(text, isMobile);
   return buffer.toString('base64');
 }
 

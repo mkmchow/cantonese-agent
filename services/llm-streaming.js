@@ -17,9 +17,10 @@ const openai = new OpenAI({
  * @param {Function} onChunk - Callback for each chunk (text)
  * @param {Function} onComplete - Callback when done (fullText)
  * @param {string} model - Model to use (optional, defaults to gpt-4o-mini)
+ * @param {boolean} isMobile - Whether client is mobile (for optimization)
  * @returns {Promise<string>} - Complete response
  */
-export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null) {
+export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false) {
   try {
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -27,14 +28,20 @@ export async function generateStreamingResponse(conversationHistory, onChunk, on
     ];
 
     const selectedModel = model || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+    
+    // Mobile optimization: Shorter responses for faster delivery
+    // Desktop: 150 tokens (~2-3 sentences)
+    // Mobile: 100 tokens (~1-2 sentences) for 33% faster response
+    const maxTokens = isMobile ? 100 : 150;
+    
     const startTime = Date.now();
-    console.log(`[LLM] Generating streaming response with ${selectedModel}...`);
+    console.log(`[LLM] Generating streaming response with ${selectedModel} (max_tokens: ${maxTokens}, mobile: ${isMobile})...`);
 
     const stream = await openai.chat.completions.create({
       model: selectedModel,
       messages: messages,
       temperature: 0.8, // More creative for natural conversation
-      max_tokens: 150, // Longer for general conversation
+      max_tokens: maxTokens,
       presence_penalty: 0.4,
       frequency_penalty: 0.4,
       stream: true
