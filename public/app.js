@@ -27,6 +27,7 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
+const roleInput = document.getElementById('roleInput');
 const personalityInput = document.getElementById('personalityInput');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
@@ -305,16 +306,19 @@ startBtn.addEventListener('click', async () => {
       }
     };
 
-    // Start session with selected model, device info, and custom personality
+    // Start session with selected model, device info, role, and custom personality
     const selectedModel = modelSelect.value;
+    const customRole = roleInput.value.trim();
     const customPersonality = personalityInput.value.trim();
     console.log('[Model] Selected model:', selectedModel);
     console.log('[Device] Sending mobile flag:', isMobile);
+    console.log('[Role] AI role:', customRole || '(none)');
     console.log('[Personality] Custom personality:', customPersonality || '(none)');
     ws.send(JSON.stringify({ 
       type: 'start',
       model: selectedModel,
       isMobile: isMobile, // Send mobile flag for server-side optimizations
+      role: customRole, // Send AI role for custom greeting
       personality: customPersonality // Send custom personality
     }));
     

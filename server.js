@@ -46,6 +46,7 @@ wss.on('connection', (ws) => {
   let selectedModel = 'openai/gpt-4o'; // Default model
   let isMobile = false; // Track if client is mobile for optimizations
   let thinkingTimeout = null; // Timer for "still thinking" notification
+  let customRole = ''; // Custom role/identity from user
   let customPersonality = ''; // Custom personality from user
 
   // State management
@@ -71,6 +72,12 @@ wss.on('connection', (ws) => {
           if (data.isMobile !== undefined) {
             isMobile = data.isMobile;
             console.log(`[Session ${sessionId}] 📱 Mobile device: ${isMobile}`);
+          }
+          
+          // Store custom role if provided
+          if (data.role) {
+            customRole = data.role;
+            console.log(`[Session ${sessionId}] 👤 Custom role: "${customRole}"`);
           }
           
           // Store custom personality if provided
@@ -124,13 +131,41 @@ wss.on('connection', (ws) => {
   });
 
   // Start conversation
-  function handleStart() {
+  async function handleStart() {
     console.log(`[Session ${sessionId}] 🚀 Starting conversation`);
     
     conversation = createSession(sessionId);
     
-    // Send greeting
-    const greeting = '你好！我係你嘅AI助手，可以用廣東話同你傾偈。有咩可以幫到你？';
+    // Generate greeting based on role
+    let greeting;
+    if (customRole) {
+      // Generate custom greeting using LLM based on role
+      console.log(`[Greeting] Generating custom greeting for role: "${customRole}"`);
+      try {
+        const greetingPrompt = `你係${customRole}。用一句簡短、自然、友善嘅廣東話同用戶打招呼，介紹你自己，表示樂意幫手。唔好太長，大概15-25字。`;
+        
+        // Use a simple non-streaming LLM call for greeting
+        const { generateStreamingResponse } = await import('./services/llm-streaming.js');
+        let fullGreeting = '';
+        await generateStreamingResponse(
+          [{ role: 'user', content: greetingPrompt }],
+          (chunk) => { fullGreeting += chunk; },
+          () => {},
+          selectedModel,
+          isMobile,
+          '' // No additional personality for greeting, just the role
+        );
+        greeting = fullGreeting.trim();
+        console.log(`[Greeting] Generated: "${greeting}"`);
+      } catch (error) {
+        console.error('[Greeting] Error generating custom greeting:', error);
+        greeting = '你好！有咩可以幫到你？';
+      }
+    } else {
+      // Default greeting
+      greeting = '你好！我係你嘅AI助手，可以用廣東話同你傾偈。有咩可以幫到你？';
+    }
+    
     conversation.addMessage('assistant', greeting);
     
     synthesizeSpeechBase64(greeting, isMobile).then(audio => {
@@ -489,7 +524,8 @@ wss.on('connection', (ws) => {
         },
         selectedModel, // Pass the selected model
         isMobile, // Pass mobile flag for optimizations
-        customPersonality // Pass custom personality
+        customPersonality, // Pass custom personality
+        customRole // Pass custom role
       );
 
       // Add to conversation history

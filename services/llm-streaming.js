@@ -19,12 +19,17 @@ const openai = new OpenAI({
  * @param {string} model - Model to use (optional, defaults to gpt-4o-mini)
  * @param {boolean} isMobile - Whether client is mobile (for optimization)
  * @param {string} customPersonality - Custom personality to append to system prompt
+ * @param {string} customRole - Custom role/identity to append to system prompt
  * @returns {Promise<string>} - Complete response
  */
-export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '') {
+export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '') {
   try {
-    // Combine base system prompt with custom personality
+    // Combine base system prompt with custom role and personality
     let systemPrompt = SYSTEM_PROMPT;
+    if (customRole) {
+      systemPrompt += `\n\n你嘅身份：${customRole}`;
+      console.log('[LLM] Using custom role:', customRole);
+    }
     if (customPersonality) {
       systemPrompt += `\n\n額外個性設定：\n${customPersonality}`;
       console.log('[LLM] Using custom personality:', customPersonality);
