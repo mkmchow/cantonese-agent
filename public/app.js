@@ -88,6 +88,9 @@ connectBtn.addEventListener('click', () => {
     connectBtn.disabled = false;
     startBtn.disabled = true;
     stopBtn.disabled = true;
+    // Re-enable role and personality inputs when disconnected
+    roleInput.disabled = false;
+    personalityInput.disabled = false;
   };
 });
 
@@ -327,6 +330,9 @@ startBtn.addEventListener('click', async () => {
     muteBtn.disabled = false;
     stopBtn.disabled = false;
     waveform.style.display = 'flex';
+    // Disable role and personality inputs during conversation
+    roleInput.disabled = true;
+    personalityInput.disabled = true;
 
   } catch (error) {
     console.error('Error starting:', error);
@@ -366,6 +372,9 @@ stopBtn.addEventListener('click', () => {
   muteBtn.classList.add('btn-secondary');
   stopBtn.disabled = true;
   waveform.style.display = 'none';
+  // Re-enable role and personality inputs when stopped
+  roleInput.disabled = false;
+  personalityInput.disabled = false;
 });
 
 // Mute/Unmute microphone

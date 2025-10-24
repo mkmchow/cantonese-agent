@@ -1,6 +1,6 @@
 // Streaming LLM for natural Cantonese conversation
 import OpenAI from 'openai';
-import { SYSTEM_PROMPT } from '../config/system-prompt.js';
+import { BASE_SYSTEM_PROMPT, DEFAULT_PERSONALITY } from '../config/system-prompt.js';
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -24,15 +24,22 @@ const openai = new OpenAI({
  */
 export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '') {
   try {
-    // Combine base system prompt with custom role and personality
-    let systemPrompt = SYSTEM_PROMPT;
+    // Build system prompt: BASE (always) + ROLE (if provided) + PERSONALITY (custom or default)
+    let systemPrompt = BASE_SYSTEM_PROMPT;
+    
+    // Add role if provided
     if (customRole) {
       systemPrompt += `\n\n你嘅身份：${customRole}`;
       console.log('[LLM] Using custom role:', customRole);
     }
+    
+    // Add personality: custom overrides default
     if (customPersonality) {
-      systemPrompt += `\n\n額外個性設定：\n${customPersonality}`;
+      systemPrompt += `\n\n你嘅個性：\n${customPersonality}`;
       console.log('[LLM] Using custom personality:', customPersonality);
+    } else {
+      systemPrompt += `\n\n${DEFAULT_PERSONALITY}`;
+      console.log('[LLM] Using default personality');
     }
     
     const messages = [
