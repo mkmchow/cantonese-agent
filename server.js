@@ -56,6 +56,12 @@ wss.on('connection', (ws) => {
           if (data.model) {
             selectedModel = data.model;
             console.log(`[Session ${sessionId}] 🤖 Selected model: ${selectedModel}`);
+            
+            // Send confirmation to client
+            ws.send(JSON.stringify({
+              type: 'model_confirmed',
+              model: selectedModel
+            }));
           }
           handleStart();
           break;
@@ -401,10 +407,16 @@ wss.on('connection', (ws) => {
       }));
 
     } catch (error) {
-      console.error('[Process] Error:', error);
+      console.error('[Process] ❌ Error processing message:');
+      console.error('[Process] Error message:', error.message);
+      console.error('[Process] Error stack:', error.stack);
+      console.error('[Process] Selected model:', selectedModel);
+      console.error('[Process] Full error:', error);
+      
       ws.send(JSON.stringify({
         type: 'error',
-        message: '唔好意思，系統出咗啲問題...'
+        message: '唔好意思，系統出咗啲問題...',
+        details: error.message // Send error details to client for debugging
       }));
     } finally {
       isProcessing = false;

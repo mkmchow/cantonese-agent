@@ -329,6 +329,11 @@ function handleServerMessage(data) {
       console.log('[STT] ✅ Buffer flushed, now streaming in real-time');
       break;
 
+    case 'model_confirmed':
+      // Server confirms which model is being used
+      console.log(`%c🤖 MODEL CONFIRMED: ${data.model}`, 'background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;');
+      break;
+
     case 'ai_response':
       // Initial greeting (full response at once)
       debugMsg('📥 Got greeting: ' + data.text.substring(0, 20));
@@ -405,8 +410,11 @@ function handleServerMessage(data) {
       break;
 
     case 'error':
-      console.error('Error:', data.message);
-      addMessage('system', `錯誤：${data.message}`);
+      console.error('❌ Server Error:', data.message);
+      if (data.details) {
+        console.error('❌ Error Details:', data.details);
+      }
+      addMessage('system', `錯誤：${data.message}${data.details ? ` (${data.details})` : ''}`);
       break;
 
     case 'stopped':
