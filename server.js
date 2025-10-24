@@ -96,6 +96,13 @@ wss.on('connection', (ws) => {
           console.log('[Audio] AI finished speaking');
           break;
 
+        case 'user_finished_speaking':
+          // User muted after speaking - signal end of turn
+          console.log('[Mute] User finished speaking (muted)');
+          // The STT will automatically finalize the transcription with the next silence
+          // No additional action needed - the transcript will be processed normally
+          break;
+
         default:
           console.log(`[WebSocket] Unknown message type: ${data.type}`);
       }

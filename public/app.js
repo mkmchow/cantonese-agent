@@ -18,9 +18,14 @@ let audioBuffer = []; // Buffer audio chunks until STT is ready
 const MAX_BUFFER_SIZE = 50; // Max chunks to buffer (~1 second at 16kHz)
 let allowAudioStreaming = false; // Don't stream audio until greeting finishes
 
+// Mute functionality
+let isMuted = false; // Track if user has muted their microphone
+let userHasSpokenThisTurn = false; // Track if user spoke before muting
+
 const connectBtn = document.getElementById('connectBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
@@ -242,12 +247,22 @@ startBtn.addEventListener('click', async () => {
       const base64Audio = arrayBufferToBase64(pcm16.buffer);
 
       if (ws && ws.readyState === WebSocket.OPEN) {
+        // Don't send audio if muted
+        if (isMuted) {
+          return;
+        }
+        
         // Don't send audio until greeting finishes playing
         if (!allowAudioStreaming) {
           if (Math.random() < 0.01) {
             console.log('[Audio] Waiting for greeting to finish before streaming...');
           }
           return;
+        }
+        
+        // Track if user has spoken this turn (for mute functionality)
+        if (level > SPEECH_THRESHOLD && !isAISpeaking) {
+          userHasSpokenThisTurn = true;
         }
         
         if (!sttReady) {
@@ -285,6 +300,7 @@ startBtn.addEventListener('click', async () => {
     
     setStatus('listening', '聆聽中...');
     startBtn.disabled = true;
+    muteBtn.disabled = false;
     stopBtn.disabled = false;
     waveform.style.display = 'flex';
 
@@ -314,10 +330,53 @@ stopBtn.addEventListener('click', () => {
   audioUnlocked = false; // Reset iOS audio unlock
   preloadedAudio = null; // Clear permanent audio element
   
+  // Reset mute state
+  isMuted = false;
+  userHasSpokenThisTurn = false;
+  
   setStatus('connected', '已停止');
   startBtn.disabled = false;
+  muteBtn.disabled = true;
+  muteBtn.textContent = '🎤 靜音';
+  muteBtn.classList.remove('btn-danger');
+  muteBtn.classList.add('btn-secondary');
   stopBtn.disabled = true;
   waveform.style.display = 'none';
+});
+
+// Mute/Unmute microphone
+muteBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+  
+  if (isMuted) {
+    console.log('[Mute] 🔇 Microphone muted');
+    muteBtn.textContent = '🔇 已靜音';
+    muteBtn.classList.remove('btn-secondary');
+    muteBtn.classList.add('btn-danger');
+    setStatus('muted', '已靜音');
+    
+    // If user spoke during this turn, signal that they're done speaking
+    if (userHasSpokenThisTurn) {
+      console.log('[Mute] User finished speaking, signaling end of turn');
+      // Send a signal to the server that user is done speaking
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ 
+          type: 'user_finished_speaking'
+        }));
+      }
+    } else {
+      console.log('[Mute] User muted without speaking, no action needed');
+    }
+  } else {
+    console.log('[Mute] 🎤 Microphone unmuted');
+    muteBtn.textContent = '🎤 靜音';
+    muteBtn.classList.remove('btn-danger');
+    muteBtn.classList.add('btn-secondary');
+    setStatus('listening', '聆聽中...');
+    
+    // Reset the spoken flag for the new turn
+    userHasSpokenThisTurn = false;
+  }
 });
 
 // Handle server messages
@@ -399,6 +458,8 @@ function handleServerMessage(data) {
       // Add message on first chunk
       if (data.isFirst) {
         addMessage('ai', data.text);
+        // Reset user spoken flag when AI starts responding
+        userHasSpokenThisTurn = false;
       } else {
         // Append to last AI message
         appendToLastAIMessage(data.text);
