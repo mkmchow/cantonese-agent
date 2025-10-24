@@ -27,6 +27,7 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
+const personalityInput = document.getElementById('personalityInput');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
@@ -304,14 +305,17 @@ startBtn.addEventListener('click', async () => {
       }
     };
 
-    // Start session with selected model and device info
+    // Start session with selected model, device info, and custom personality
     const selectedModel = modelSelect.value;
+    const customPersonality = personalityInput.value.trim();
     console.log('[Model] Selected model:', selectedModel);
     console.log('[Device] Sending mobile flag:', isMobile);
+    console.log('[Personality] Custom personality:', customPersonality || '(none)');
     ws.send(JSON.stringify({ 
       type: 'start',
       model: selectedModel,
-      isMobile: isMobile // Send mobile flag for server-side optimizations
+      isMobile: isMobile, // Send mobile flag for server-side optimizations
+      personality: customPersonality // Send custom personality
     }));
     
     setStatus('listening', '聆聽中...');

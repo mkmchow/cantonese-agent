@@ -46,6 +46,7 @@ wss.on('connection', (ws) => {
   let selectedModel = 'openai/gpt-4o-mini'; // Default model
   let isMobile = false; // Track if client is mobile for optimizations
   let thinkingTimeout = null; // Timer for "still thinking" notification
+  let customPersonality = ''; // Custom personality from user
 
   // State management
   ws.on('message', async (message) => {
@@ -70,6 +71,12 @@ wss.on('connection', (ws) => {
           if (data.isMobile !== undefined) {
             isMobile = data.isMobile;
             console.log(`[Session ${sessionId}] 📱 Mobile device: ${isMobile}`);
+          }
+          
+          // Store custom personality if provided
+          if (data.personality) {
+            customPersonality = data.personality;
+            console.log(`[Session ${sessionId}] 🎭 Custom personality: "${customPersonality}"`);
           }
           
           handleStart();
@@ -481,7 +488,8 @@ wss.on('connection', (ws) => {
           }
         },
         selectedModel, // Pass the selected model
-        isMobile // Pass mobile flag for optimizations
+        isMobile, // Pass mobile flag for optimizations
+        customPersonality // Pass custom personality
       );
 
       // Add to conversation history

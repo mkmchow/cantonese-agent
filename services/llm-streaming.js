@@ -18,12 +18,20 @@ const openai = new OpenAI({
  * @param {Function} onComplete - Callback when done (fullText)
  * @param {string} model - Model to use (optional, defaults to gpt-4o-mini)
  * @param {boolean} isMobile - Whether client is mobile (for optimization)
+ * @param {string} customPersonality - Custom personality to append to system prompt
  * @returns {Promise<string>} - Complete response
  */
-export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false) {
+export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '') {
   try {
+    // Combine base system prompt with custom personality
+    let systemPrompt = SYSTEM_PROMPT;
+    if (customPersonality) {
+      systemPrompt += `\n\n額外個性設定：\n${customPersonality}`;
+      console.log('[LLM] Using custom personality:', customPersonality);
+    }
+    
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       ...conversationHistory
     ];
 
