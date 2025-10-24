@@ -460,6 +460,26 @@ function handleServerMessage(data) {
       updateAIThinking(data.current);
       break;
 
+    case 'ai_thinking_notification':
+      // AI is taking longer than expected - play notification
+      console.log('[Thinking] Playing notification:', data.text);
+      debugMsg('⏱️ AI thinking notification');
+      
+      // Play the notification audio immediately (without queuing)
+      if (data.audio && preloadedAudio) {
+        try {
+          preloadedAudio.pause();
+          preloadedAudio.currentTime = 0;
+          preloadedAudio.src = `data:audio/mpeg;base64,${data.audio}`;
+          preloadedAudio.play().catch(err => {
+            console.error('[Thinking] Failed to play notification:', err);
+          });
+        } catch (err) {
+          console.error('[Thinking] Error playing notification:', err);
+        }
+      }
+      break;
+
     case 'ai_audio_chunk':
       // Streaming audio chunk
       debugMsg('📥 Audio chunk: ' + data.text.substring(0, 15));

@@ -45,6 +45,7 @@ wss.on('connection', (ws) => {
   let currentResponseId = null; // Track response ID to cancel properly
   let selectedModel = 'openai/gpt-4o-mini'; // Default model
   let isMobile = false; // Track if client is mobile for optimizations
+  let thinkingTimeout = null; // Timer for "still thinking" notification
 
   // State management
   ws.on('message', async (message) => {
@@ -222,6 +223,13 @@ wss.on('connection', (ws) => {
           currentResponseId = null; // Cancel current response
           currentAudioQueue = [];
           
+          // Clear thinking timeout on interruption
+          if (thinkingTimeout) {
+            clearTimeout(thinkingTimeout);
+            thinkingTimeout = null;
+            console.log('[Thinking] ✅ Cleared timeout - interrupted');
+          }
+          
           ws.send(JSON.stringify({
             type: 'stop_playback',
             reason: 'interrupted'
@@ -353,6 +361,23 @@ wss.on('connection', (ws) => {
     const startTime = Date.now();
     console.log(`\n[Session ${sessionId}] 💬 Processing: "${transcript}" [Response #${responseId}]`);
 
+    // Start thinking timeout (5 seconds)
+    thinkingTimeout = setTimeout(async () => {
+      console.log('[Thinking] ⏱️ Response taking longer than 5s, sending thinking notification');
+      try {
+        const thinkingMessage = '等等，我諗緊點樣答你...';
+        const audio = await synthesizeSpeechBase64(thinkingMessage, isMobile);
+        
+        ws.send(JSON.stringify({
+          type: 'ai_thinking_notification',
+          text: thinkingMessage,
+          audio: audio
+        }));
+      } catch (error) {
+        console.error('[Thinking] Error sending notification:', error);
+      }
+    }, 5000);
+
     try {
       // Add user message
       conversation.addMessage('user', transcript);
@@ -399,6 +424,12 @@ wss.on('connection', (ws) => {
                 // Mark AI as speaking on first chunk
                 if (thisSentenceNum === 1) {
                   isAISpeaking = true;
+                  // Clear thinking timeout since we're now responding
+                  if (thinkingTimeout) {
+                    clearTimeout(thinkingTimeout);
+                    thinkingTimeout = null;
+                    console.log('[Thinking] ✅ Cleared timeout - response started');
+                  }
                 }
                 
                 ws.send(JSON.stringify({
@@ -472,6 +503,12 @@ wss.on('connection', (ws) => {
       console.error('[Process] Error stack:', error.stack);
       console.error('[Process] Selected model:', selectedModel);
       console.error('[Process] Full error:', error);
+      
+      // Clear thinking timeout on error
+      if (thinkingTimeout) {
+        clearTimeout(thinkingTimeout);
+        thinkingTimeout = null;
+      }
       
       ws.send(JSON.stringify({
         type: 'error',
