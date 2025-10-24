@@ -176,13 +176,29 @@ startBtn.addEventListener('click', async () => {
     // 
     // NOTE: Increased to 0.04 to prevent AI's echo from triggering interruption
     // Echo cancellation reduces AI voice but doesn't eliminate it completely
-    // Mobile: Lower threshold since mobile mics are quieter
-    const SPEECH_THRESHOLD = isMobile ? 0.03 : 0.04; // Lower for mobile
-    const SILENCE_THRESHOLD = isMobile ? 0.006 : 0.008; // Lower for mobile
+    // Mobile: Much lower threshold since mobile mics are quieter and need higher sensitivity
+    const SPEECH_THRESHOLD = isMobile ? 0.02 : 0.04; // 50% lower for mobile
+    const SILENCE_THRESHOLD = isMobile ? 0.004 : 0.008; // 50% lower for mobile
+    
+    // Mobile: Apply gain boost to amplify quieter signals
+    const MOBILE_GAIN_BOOST = 1.5; // 50% amplification for mobile
     console.log('[VAD] Thresholds - Speech:', SPEECH_THRESHOLD, 'Silence:', SILENCE_THRESHOLD);
+    if (isMobile) {
+      console.log('[Mobile] Gain boost applied:', MOBILE_GAIN_BOOST + 'x');
+    }
     
     processor.onaudioprocess = (e) => {
-      const inputData = e.inputBuffer.getChannelData(0);
+      let inputData = e.inputBuffer.getChannelData(0);
+      
+      // Mobile optimization: Apply gain boost to pick up quieter speech
+      if (isMobile) {
+        // Create a copy and amplify
+        const amplifiedData = new Float32Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          amplifiedData[i] = Math.max(-1, Math.min(1, inputData[i] * MOBILE_GAIN_BOOST));
+        }
+        inputData = amplifiedData;
+      }
       
       // Calculate audio level for visualization
       let sum = 0;
