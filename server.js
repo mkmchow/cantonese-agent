@@ -43,6 +43,7 @@ wss.on('connection', (ws) => {
   let currentAudioQueue = [];
   let isProcessing = false;
   let currentResponseId = null; // Track response ID to cancel properly
+  let selectedModel = 'openai/gpt-4o-mini'; // Default model
 
   // State management
   ws.on('message', async (message) => {
@@ -51,6 +52,11 @@ wss.on('connection', (ws) => {
 
       switch (data.type) {
         case 'start':
+          // Store selected model if provided
+          if (data.model) {
+            selectedModel = data.model;
+            console.log(`[Session ${sessionId}] 🤖 Selected model: ${selectedModel}`);
+          }
           handleStart();
           break;
 
@@ -377,7 +383,8 @@ wss.on('connection', (ws) => {
               console.error('[TTS] Error:', err.message);
             });
           }
-        }
+        },
+        selectedModel // Pass the selected model
       );
 
       // Add to conversation history

@@ -10,7 +10,7 @@ let vadEnabled = false; // Only enable VAD after echo cancellation stabilizes
 let audioStartTime = 0; // Track when audio started
 let recentAudioLevels = []; // Track recent audio levels for echo detection
 let audioUnlocked = false; // Track if iOS audio is unlocked
-let permanentAudio = null; // Single reusable audio element created during user gesture
+let preloadedAudio = null; // Pre-created audio element for iOS
 
 // Audio buffering for STT initialization
 let sttReady = false; // Track if STT is ready to receive audio
@@ -21,10 +21,12 @@ let allowAudioStreaming = false; // Don't stream audio until greeting finishes
 const connectBtn = document.getElementById('connectBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const modelSelect = document.getElementById('modelSelect');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const conversation = document.getElementById('conversation');
 const waveform = document.getElementById('waveform');
+const mobileHint = document.getElementById('mobileHint');
 const debugLog = document.getElementById('debugLog');
 
 // Debug logging (visible on mobile)
@@ -43,8 +45,9 @@ function debugMsg(msg) {
   }
 }
 
-// Log mobile device detection
+// Show mobile hint if on mobile device
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  if (mobileHint) mobileHint.style.display = 'block';
   debugMsg('📱 Mobile device detected');
 }
 
@@ -101,24 +104,17 @@ startBtn.addEventListener('click', async () => {
       console.log('[Audio] AudioContext resumed for iOS');
     }
     
-    // iOS Audio Unlock: Create permanent audio element during user gesture
+    // iOS Audio Unlock: Play silent audio on user gesture
     if (!audioUnlocked) {
       try {
         debugMsg('🔓 Unlocking iOS audio...');
-        
-        // Create the permanent audio element HERE (during user gesture)
-        permanentAudio = new Audio();
-        permanentAudio.volume = 1.0;
-        
-        // Play silent audio to unlock
         const silentAudio = new Audio();
         silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S/5VEkAAAAAAD/+xDEAAP8AAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxA8DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
         silentAudio.volume = 0.01;
         await silentAudio.play();
-        
         audioUnlocked = true;
-        debugMsg('✅ iOS audio unlocked + permanent audio created');
-        console.log('[Audio] iOS audio unlocked, permanent audio element created');
+        debugMsg('✅ iOS audio unlocked');
+        console.log('[Audio] iOS audio unlocked');
       } catch (e) {
         debugMsg('⚠️ Audio unlock failed: ' + e.message);
         console.warn('[Audio] Failed to unlock:', e);
@@ -262,8 +258,13 @@ startBtn.addEventListener('click', async () => {
       }
     };
 
-    // Start session
-    ws.send(JSON.stringify({ type: 'start' }));
+    // Start session with selected model
+    const selectedModel = modelSelect.value;
+    console.log('[Model] Selected model:', selectedModel);
+    ws.send(JSON.stringify({ 
+      type: 'start',
+      model: selectedModel 
+    }));
     
     setStatus('listening', '聆聽中...');
     startBtn.disabled = true;
@@ -294,7 +295,6 @@ stopBtn.addEventListener('click', () => {
   audioBuffer = [];
   allowAudioStreaming = false;
   audioUnlocked = false; // Reset iOS audio unlock
-  permanentAudio = null; // Clear permanent audio element
   
   setStatus('connected', '已停止');
   startBtn.disabled = false;
@@ -560,20 +560,8 @@ function playNextInQueue() {
   debugMsg('🔊 Playing chunk (' + audioQueue.length + ' left)');
   console.log('[Audio] 🔊 Playing chunk (remaining: ' + audioQueue.length + ')');
   
-  // Use permanent audio element (created during user gesture for iOS)
-  const audio = permanentAudio || new Audio();
-  
-  // Clean up old blob URL if exists
-  if (audio.dataset.blobUrl) {
-    URL.revokeObjectURL(audio.dataset.blobUrl);
-    delete audio.dataset.blobUrl;
-  }
-  
-  // Reset audio element for reuse
-  audio.pause();
-  audio.currentTime = 0;
-  audio.src = '';
-  
+  // Create audio element
+  const audio = new Audio();
   currentAudio = audio;
   
   // Set source AFTER adding event listeners (iOS requirement)
@@ -606,64 +594,13 @@ function playNextInQueue() {
     debugMsg('⏳ Audio loading...');
   };
   
-  audio.onloadeddata = () => {
-    debugMsg('✓ Audio data loaded');
-  };
-  
-  audio.onstalled = () => {
-    debugMsg('⚠️ Audio stalled');
-  };
-  
-  // Set source using Blob URL (iOS requirement - data URIs often fail)
-  try {
-    debugMsg('Setting src (base64 len: ' + base64Audio.length + ')');
-    
-    // Validate base64
-    if (!base64Audio || base64Audio.length < 100) {
-      debugMsg('❌ Invalid audio data');
-      throw new Error('Audio data too short or empty');
-    }
-    
-    // Convert base64 to Blob
-    const binaryString = atob(base64Audio);
-    debugMsg('✓ Base64 decoded (' + binaryString.length + ' bytes)');
-    
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    debugMsg('✓ Created byte array');
-    
-    // Try multiple MIME types for iOS compatibility
-    const blob = new Blob([bytes.buffer], { type: 'audio/mp3' });
-    debugMsg('✓ Created blob (' + blob.size + ' bytes, type: ' + blob.type + ')');
-    
-    const blobUrl = URL.createObjectURL(blob);
-    debugMsg('✓ Created blob URL: ' + blobUrl.substring(0, 30) + '...');
-    
-    // Store blob URL for cleanup
-    audio.dataset.blobUrl = blobUrl;
-    
-    audio.src = blobUrl;
-    debugMsg('✓ Set audio.src');
-    
-    audio.load(); // Explicitly load on iOS
-    debugMsg('✓ Called audio.load()');
-  } catch (e) {
-    debugMsg('❌ Error: ' + e.message);
-    console.error('[Audio] Error creating blob:', e);
-  }
+  // Set source
+  audio.src = 'data:audio/mp3;base64,' + base64Audio;
+  audio.load(); // Explicitly load on iOS
 
   audio.onended = () => {
     console.log('[Audio] ⏹️ Chunk ended');
     isPlaying = false;
-    
-    // Clean up blob URL to prevent memory leak
-    if (audio.dataset.blobUrl) {
-      URL.revokeObjectURL(audio.dataset.blobUrl);
-      delete audio.dataset.blobUrl;
-    }
-    
     currentAudio = null;
     thinkingMsg = null;
     
@@ -680,21 +617,9 @@ function playNextInQueue() {
   };
 
   audio.onerror = (e) => {
-    const errorCode = e.target.error ? e.target.error.code : 'unknown';
-    const errorMsg = e.target.error ? e.target.error.message : 'unknown';
-    debugMsg('❌ Audio error: code=' + errorCode + ', msg=' + errorMsg);
+    debugMsg('❌ Audio error: ' + (e.target.error ? e.target.error.message : 'unknown'));
     console.error('[Audio] ❌ Error:', e);
-    console.error('[Audio] Error code:', errorCode);
-    console.error('[Audio] Error message:', errorMsg);
-    console.error('[Audio] Audio src length:', audio.src ? audio.src.length : 0);
     isPlaying = false;
-    
-    // Clean up blob URL
-    if (audio.dataset.blobUrl) {
-      URL.revokeObjectURL(audio.dataset.blobUrl);
-      delete audio.dataset.blobUrl;
-    }
-    
     currentAudio = null;
     
     // Enable streaming even if audio fails
@@ -710,12 +635,6 @@ function playNextInQueue() {
     debugMsg('❌ Play failed: ' + e.message);
     console.error('[Audio] ❌ Play failed:', e);
     console.error('[Audio] Error details:', e.name, e.message);
-    
-    // Clean up blob URL
-    if (audio.dataset.blobUrl) {
-      URL.revokeObjectURL(audio.dataset.blobUrl);
-      delete audio.dataset.blobUrl;
-    }
     
     // Enable streaming if play fails
     allowAudioStreaming = true;
@@ -744,13 +663,6 @@ function stopAudioPlayback() {
     try {
       currentAudio.pause();
       currentAudio.currentTime = 0;
-      
-      // Clean up blob URL
-      if (currentAudio.dataset.blobUrl) {
-        URL.revokeObjectURL(currentAudio.dataset.blobUrl);
-        delete currentAudio.dataset.blobUrl;
-      }
-      
       currentAudio.src = ''; // Clear source to force stop
       currentAudio.load(); // Force reload to completely stop
       console.log('[Audio] ✋ Current audio forcefully stopped');

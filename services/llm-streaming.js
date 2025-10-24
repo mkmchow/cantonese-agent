@@ -16,20 +16,22 @@ const openai = new OpenAI({
  * @param {Array} conversationHistory - Message history
  * @param {Function} onChunk - Callback for each chunk (text)
  * @param {Function} onComplete - Callback when done (fullText)
+ * @param {string} model - Model to use (optional, defaults to gpt-4o-mini)
  * @returns {Promise<string>} - Complete response
  */
-export async function generateStreamingResponse(conversationHistory, onChunk, onComplete) {
+export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null) {
   try {
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...conversationHistory
     ];
 
+    const selectedModel = model || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     const startTime = Date.now();
-    console.log('[LLM] Generating streaming response...');
+    console.log(`[LLM] Generating streaming response with ${selectedModel}...`);
 
     const stream = await openai.chat.completions.create({
-      model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
+      model: selectedModel,
       messages: messages,
       temperature: 0.8, // More creative for natural conversation
       max_tokens: 150, // Longer for general conversation
