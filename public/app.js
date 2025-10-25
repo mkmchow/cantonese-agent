@@ -610,14 +610,17 @@ function handleServerMessage(data) {
       debugMsg('📥 Audio chunk: ' + data.text.substring(0, 15));
       console.log('[Chunk] Received:', data.text);
       
-      // Clear thinking message when first audio arrives
+      // Convert thinking message to final message when first audio arrives
       if (data.isFirst && thinkingMsg) {
-        thinkingMsg.remove();
-        thinkingMsg = null;
-      }
-      
-      // Add message on first chunk
-      if (data.isFirst) {
+        // Update the thinking message to be a regular AI message
+        thinkingMsg.style.opacity = '1';
+        thinkingMsg.querySelector('.message-label').textContent = 'AI';
+        thinkingMsg.querySelector('.message-text').textContent = data.text;
+        thinkingMsg = null; // Clear reference
+        // Reset user spoken flag when AI starts responding
+        userHasSpokenThisTurn = false;
+      } else if (data.isFirst) {
+        // No thinking message, add new message
         addMessage('ai', data.text);
         // Reset user spoken flag when AI starts responding
         userHasSpokenThisTurn = false;
