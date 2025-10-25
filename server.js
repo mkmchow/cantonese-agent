@@ -7,6 +7,7 @@ import { createStreamingSTT, detectVoiceActivity } from './services/stt-streamin
 import { generateStreamingResponse } from './services/llm-streaming.js';
 import { synthesizeSpeechBase64, synthesizeStreaming, warmupCache } from './services/tts-streaming.js';
 import { createSession, getSession, deleteSession } from './services/conversation.js';
+import { STT_CLARIFICATION_MESSAGES, AI_THINKING_MESSAGES } from './config/system-prompt.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -309,13 +310,13 @@ wss.on('connection', (ws) => {
             // Valid transcript - process it
             processUserMessage(trimmedTranscript);
           } else if (trimmedTranscript && confidence <= 0.5) {
-            // Low confidence - ask for clarification
+            // Low confidence - ask for clarification with random message
             console.log(`[STT] ⚠️ Low confidence (${confidence.toFixed(2)}) for: "${trimmedTranscript}"`);
-            sendClarificationRequest("我聽唔清楚，可唔可以再講一次？");
+            sendClarificationRequest();
           } else {
             // Empty transcript - likely recognition failure
             console.log('[STT] ⚠️ Empty transcript received - asking user to speak again');
-            sendClarificationRequest("唔好意思，我冇聽到你講嘢。可以再講一次嗎？");
+            sendClarificationRequest();
           }
         }
       },
@@ -425,9 +426,12 @@ wss.on('connection', (ws) => {
   }
 
   // Send clarification request (without LLM processing)
-  async function sendClarificationRequest(message) {
+  // Randomly selects from STT_CLARIFICATION_MESSAGES for variety
+  async function sendClarificationRequest() {
     try {
-      console.log(`[Clarification] Sending: "${message}"`);
+      // Pick random clarification message
+      const message = STT_CLARIFICATION_MESSAGES[Math.floor(Math.random() * STT_CLARIFICATION_MESSAGES.length)];
+      console.log(`[Clarification] Sending (${STT_CLARIFICATION_MESSAGES.length} variations): "${message}"`);
       
       // Mark AI as speaking
       isAISpeaking = true;
@@ -473,7 +477,9 @@ wss.on('connection', (ws) => {
     thinkingTimeout = setTimeout(async () => {
       console.log('[Thinking] ⏱️ Response taking longer than 5s, sending thinking notification');
       try {
-        const thinkingMessage = '等等，我諗緊點樣答你...';
+        // Pick random thinking message
+        const thinkingMessage = AI_THINKING_MESSAGES[Math.floor(Math.random() * AI_THINKING_MESSAGES.length)];
+        console.log(`[Thinking] Sending (${AI_THINKING_MESSAGES.length} variations): "${thinkingMessage}"`);
         const audio = await synthesizeSpeechBase64(thinkingMessage, isMobile);
         
         ws.send(JSON.stringify({

@@ -1,6 +1,11 @@
 // Streaming LLM for natural Cantonese conversation
 import OpenAI from 'openai';
-import { BASE_SYSTEM_PROMPT_CORE, DEFAULT_WORD_COUNT_INSTRUCTION, DEFAULT_PERSONALITY } from '../config/system-prompt.js';
+import { 
+  BASE_SYSTEM_PROMPT_ABSOLUTE, 
+  DEFAULT_CONVERSATIONAL_STYLE,
+  DEFAULT_WORD_COUNT_INSTRUCTION, 
+  DEFAULT_PERSONALITY 
+} from '../config/system-prompt.js';
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -25,8 +30,17 @@ const openai = new OpenAI({
  */
 export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '', customWordLimit = null) {
   try {
-    // Build system prompt: BASE_CORE (always) + WORD_COUNT (if no custom limit) + ROLE (if provided) + PERSONALITY (custom or default)
-    let systemPrompt = BASE_SYSTEM_PROMPT_CORE;
+    // Build system prompt: ABSOLUTE (always) + CONVERSATIONAL_STYLE (if no custom personality) + WORD_COUNT (if no custom limit) + ROLE + PERSONALITY
+    let systemPrompt = BASE_SYSTEM_PROMPT_ABSOLUTE;
+    
+    // Add conversational style ONLY if user hasn't provided custom personality
+    // Custom personality overrides our default style (tone words, formality, etc.)
+    if (!customPersonality) {
+      systemPrompt += DEFAULT_CONVERSATIONAL_STYLE;
+      console.log('[LLM] Using default conversational style');
+    } else {
+      console.log('[LLM] Custom personality provided - user controls conversational style');
+    }
     
     // Add word count instruction ONLY if user hasn't specified custom limit
     // This prevents conflict between system prompt instructions and max_tokens parameter
@@ -34,7 +48,7 @@ export async function generateStreamingResponse(conversationHistory, onChunk, on
       systemPrompt += DEFAULT_WORD_COUNT_INSTRUCTION;
       console.log('[LLM] Using default word count guidance (10-30字)');
     } else {
-      console.log('[LLM] Custom word limit set - omitting default word count guidance to avoid conflicts');
+      console.log('[LLM] Custom word limit set - omitting default word count guidance');
     }
     
     // Add role if provided
@@ -43,9 +57,9 @@ export async function generateStreamingResponse(conversationHistory, onChunk, on
       console.log('[LLM] Using custom role:', customRole);
     }
     
-    // Add personality: custom overrides default
+    // Add personality: custom overrides default (both personality AND conversational style)
     if (customPersonality) {
-      systemPrompt += `\n\n你嘅個性：\n${customPersonality}`;
+      systemPrompt += `\n\n你嘅個性同風格：\n${customPersonality}`;
       console.log('[LLM] Using custom personality:', customPersonality);
     } else {
       systemPrompt += `\n\n${DEFAULT_PERSONALITY}`;
