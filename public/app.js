@@ -29,6 +29,7 @@ const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
 const roleInput = document.getElementById('roleInput');
 const personalityInput = document.getElementById('personalityInput');
+const wordLimitInput = document.getElementById('wordLimitInput');
 const refineRoleBtn = document.getElementById('refineRoleBtn');
 const refinePersonalityBtn = document.getElementById('refinePersonalityBtn');
 const toggleConfigBtn = document.getElementById('toggleConfigBtn');
@@ -96,6 +97,7 @@ connectBtn.addEventListener('click', () => {
     modelSelect.disabled = false;
     roleInput.disabled = false;
     personalityInput.disabled = false;
+    wordLimitInput.disabled = false;
     refineRoleBtn.disabled = false;
     refinePersonalityBtn.disabled = false;
     // Show config sections and hide toggle button
@@ -325,14 +327,19 @@ startBtn.addEventListener('click', async () => {
     const customPersonality = personalityInput.value.trim();
     console.log('[Model] Selected model:', selectedModel);
     console.log('[Device] Sending mobile flag:', isMobile);
+    // Get word limit (if specified)
+    const wordLimit = wordLimitInput.value ? parseInt(wordLimitInput.value) : null;
+    
     console.log('[Role] AI role:', customRole || '(none)');
     console.log('[Personality] Custom personality:', customPersonality || '(none)');
+    console.log('[Word Limit] Max tokens:', wordLimit || '(default)');
     ws.send(JSON.stringify({ 
       type: 'start',
       model: selectedModel,
       isMobile: isMobile, // Send mobile flag for server-side optimizations
       role: customRole, // Send AI role for custom greeting
-      personality: customPersonality // Send custom personality
+      personality: customPersonality, // Send custom personality
+      wordLimit: wordLimit // Send word limit override
     }));
     
     setStatus('listening', '聆聽中...');
@@ -344,6 +351,7 @@ startBtn.addEventListener('click', async () => {
     modelSelect.disabled = true;
     roleInput.disabled = true;
     personalityInput.disabled = true;
+    wordLimitInput.disabled = true;
     refineRoleBtn.disabled = true;
     refinePersonalityBtn.disabled = true;
     // Hide config sections on mobile to save screen space
@@ -393,6 +401,7 @@ stopBtn.addEventListener('click', () => {
   modelSelect.disabled = false;
   roleInput.disabled = false;
   personalityInput.disabled = false;
+  wordLimitInput.disabled = false;
   refineRoleBtn.disabled = false;
   refinePersonalityBtn.disabled = false;
   // Show config sections and hide toggle button

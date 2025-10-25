@@ -107,6 +107,7 @@ wss.on('connection', (ws) => {
   let thinkingTimeout = null; // Timer for "still thinking" notification
   let customRole = ''; // Custom role/identity from user
   let customPersonality = ''; // Custom personality from user
+  let wordLimit = null; // Custom word/token limit from user
 
   // State management
   ws.on('message', async (message) => {
@@ -143,6 +144,12 @@ wss.on('connection', (ws) => {
           if (data.personality) {
             customPersonality = data.personality;
             console.log(`[Session ${sessionId}] 🎭 Custom personality: "${customPersonality}"`);
+          }
+          
+          // Store custom word limit if provided
+          if (data.wordLimit) {
+            wordLimit = data.wordLimit;
+            console.log(`[Session ${sessionId}] 📝 Custom word limit: ${wordLimit} tokens`);
           }
           
           handleStart();
@@ -584,7 +591,8 @@ wss.on('connection', (ws) => {
         selectedModel, // Pass the selected model
         isMobile, // Pass mobile flag for optimizations
         customPersonality, // Pass custom personality
-        customRole // Pass custom role
+        customRole, // Pass custom role
+        wordLimit // Pass custom word limit
       );
 
       // Add to conversation history

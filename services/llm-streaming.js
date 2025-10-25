@@ -20,9 +20,10 @@ const openai = new OpenAI({
  * @param {boolean} isMobile - Whether client is mobile (for optimization)
  * @param {string} customPersonality - Custom personality to append to system prompt
  * @param {string} customRole - Custom role/identity to append to system prompt
+ * @param {number} customWordLimit - Custom max_tokens limit (overrides default)
  * @returns {Promise<string>} - Complete response
  */
-export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '') {
+export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '', customWordLimit = null) {
   try {
     // Build system prompt: BASE (always) + ROLE (if provided) + PERSONALITY (custom or default)
     let systemPrompt = BASE_SYSTEM_PROMPT;
@@ -49,13 +50,20 @@ export async function generateStreamingResponse(conversationHistory, onChunk, on
 
     const selectedModel = model || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     
-    // Mobile optimization: Shorter responses for faster delivery
-    // Desktop: 150 tokens (~2-3 sentences)
+    // Token limit priority: Custom > Mobile-optimized > Default
+    // Custom: User-specified limit (overrides everything)
     // Mobile: 100 tokens (~1-2 sentences) for 33% faster response
-    const maxTokens = isMobile ? 100 : 150;
+    // Desktop: 150 tokens (~2-3 sentences)
+    let maxTokens;
+    if (customWordLimit) {
+      maxTokens = customWordLimit;
+      console.log(`[LLM] Using custom word limit: ${maxTokens} tokens`);
+    } else {
+      maxTokens = isMobile ? 100 : 150;
+    }
     
     const startTime = Date.now();
-    console.log(`[LLM] Generating streaming response with ${selectedModel} (max_tokens: ${maxTokens}, mobile: ${isMobile})...`);
+    console.log(`[LLM] Generating streaming response with ${selectedModel} (max_tokens: ${maxTokens}, mobile: ${isMobile}, custom: ${!!customWordLimit})...`);
 
     const stream = await openai.chat.completions.create({
       model: selectedModel,
