@@ -440,7 +440,9 @@
     @media (max-width: 767px) {
       .conversation {
         min-height: 200px;
-        padding-bottom: 20px;
+        /* Add extra padding to prevent last message from being hidden behind fixed buttons */
+        /* Button height (~65px) + safe area + spacing */
+        padding-bottom: calc(20px + 65px + env(safe-area-inset-bottom));
       }
     }
 

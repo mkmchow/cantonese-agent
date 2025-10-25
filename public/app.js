@@ -684,6 +684,19 @@ function handleServerMessage(data) {
   }
 }
 
+// Helper function to scroll conversation to bottom (mobile-aware)
+function scrollToBottom() {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const scrollableContent = document.querySelector('.scrollable-content');
+  if (isMobile && scrollableContent) {
+    // Mobile: scroll the wrapper to bottom
+    scrollableContent.scrollTop = scrollableContent.scrollHeight;
+  } else {
+    // Desktop: scroll conversation div
+    conversation.scrollTop = conversation.scrollHeight;
+  }
+}
+
 // Add message to conversation
 function addMessage(role, text) {
   // Clear placeholder
@@ -713,7 +726,7 @@ function addMessage(role, text) {
   `;
   
   conversation.appendChild(messageDiv);
-  conversation.scrollTop = conversation.scrollHeight;
+  scrollToBottom();
 }
 
 // Add message only if not duplicate
@@ -734,7 +747,7 @@ function appendToLastAIMessage(text) {
       lastAIMsg.dataset.text += text;
     }
   }
-  conversation.scrollTop = conversation.scrollHeight;
+  scrollToBottom();
 }
 
 // Update interim transcript
@@ -757,7 +770,7 @@ function updateInterimTranscript(text) {
     interimMsg.querySelector('.message-text').textContent = text;
   }
   
-  conversation.scrollTop = conversation.scrollHeight;
+  scrollToBottom();
 }
 
 // Update AI thinking message
@@ -780,7 +793,7 @@ function updateAIThinking(text) {
     thinkingMsg.querySelector('.message-text').textContent = text;
   }
   
-  conversation.scrollTop = conversation.scrollHeight;
+  scrollToBottom();
 }
 
 // Queue audio chunk for playback
