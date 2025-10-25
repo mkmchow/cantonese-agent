@@ -32,16 +32,16 @@
       position: relative;
     }
     
-    /* Mobile: Create scrollable content area above buttons */
+    /* Mobile: Create scrollable content area above status + buttons */
     @media (max-width: 767px) {
       .scrollable-content {
         flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
-        /* Add padding to prevent content from being hidden behind fixed buttons */
-        /* Button height (~65px) + safe area + extra space */
-        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+        /* Add padding to prevent content from being hidden behind fixed status + buttons */
+        /* Status height (~50px) + Button height (~65px) + safe area */
+        padding-bottom: calc(115px + env(safe-area-inset-bottom));
       }
     }
     
@@ -102,20 +102,22 @@
 
     .sticky-top {
       background: white;
-      z-index: 90;
+      z-index: 85;
       flex-shrink: 0;
-      padding: 20px 20px 15px;
-      border-bottom: 1px solid #e0e0e0;
+      padding: 12px 20px;
     }
     
-    /* Mobile: Sticky at bottom of scrollable area, above fixed buttons */
+    /* Mobile: Fixed at bottom, right above the fixed buttons */
     @media (max-width: 767px) {
       .sticky-top {
-        position: sticky;
-        bottom: 0;
-        border-bottom: none;
+        position: fixed;
+        bottom: 65px; /* Height of control buttons */
+        left: 0;
+        right: 0;
         border-top: 1px solid #e0e0e0;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        padding: 10px 20px;
+        z-index: 85; /* Above content, below buttons (z-index 90) */
       }
     }
     
@@ -124,6 +126,8 @@
       .sticky-top {
         position: sticky;
         top: 0;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 20px 20px 15px;
       }
     }
 
@@ -133,6 +137,14 @@
       padding: 18px 15px;
       text-align: center;
       font-size: 0.95rem;
+    }
+    
+    /* Mobile: Smaller padding for compact layout */
+    @media (max-width: 767px) {
+      .status {
+        padding: 12px 15px;
+        font-size: 0.9rem;
+      }
     }
 
     @media (min-width: 768px) {
@@ -187,7 +199,7 @@
       gap: 8px;
       background: white;
       flex-shrink: 0;
-      z-index: 80;
+      z-index: 90;
     }
     
     /* Mobile: Fixed at bottom, always visible */
@@ -201,6 +213,7 @@
         padding-bottom: calc(15px + env(safe-area-inset-bottom));
         border-top: 1px solid #e0e0e0;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 90; /* Above status (z-index 85) */
       }
     }
 
@@ -440,13 +453,13 @@
       scroll-behavior: smooth;
     }
     
-    /* Mobile: Part of scrollable content, with padding for fixed buttons */
+    /* Mobile: Part of scrollable content, with padding for fixed status + buttons */
     @media (max-width: 767px) {
       .conversation {
         min-height: 200px;
-        /* Add extra padding to prevent last message from being hidden behind fixed buttons */
-        /* Button height (~65px) + safe area + spacing */
-        padding-bottom: calc(20px + 65px + env(safe-area-inset-bottom));
+        /* Add padding to prevent last message from being hidden behind fixed status + buttons */
+        /* Status height (~50px) + Button height (~65px) + spacing */
+        padding-bottom: 130px;
       }
     }
 
@@ -677,14 +690,14 @@
           <small style="margin-top: 10px; display: block;">講廣東話同AI傾偈</small>
         </div>
       </div>
-
-      <div class="sticky-top">
-        <div class="status">
-          <span class="status-indicator" id="statusIndicator"></span>
-          <span id="statusText">未連接</span>
-        </div>
-      </div>
     </div><!-- End scrollable-content -->
+
+    <div class="sticky-top">
+      <div class="status">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span id="statusText">未連接</span>
+      </div>
+    </div>
 
     <div class="controls">
       <button id="connectBtn" class="btn btn-primary">連接</button>
