@@ -252,11 +252,39 @@
     }
 
     .personality-section label {
-      display: block;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       font-size: 14px;
       color: #666;
       margin-bottom: 8px;
       font-weight: 600;
+    }
+
+    .refine-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .refine-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+    }
+
+    .refine-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .refine-btn.refining {
+      background: #999;
     }
 
     .role-input {
@@ -538,7 +566,10 @@
     </div>
 
     <div class="personality-section">
-      <label for="roleInput">👤 AI身份</label>
+      <label for="roleInput">
+        <span>👤 AI身份</span>
+        <button id="refineRoleBtn" class="refine-btn">✨ 優化</button>
+      </label>
       <input 
         type="text"
         id="roleInput" 
@@ -548,7 +579,10 @@
     </div>
 
     <div class="personality-section">
-      <label for="personalityInput">🎭 AI性格同知識</label>
+      <label for="personalityInput">
+        <span>🎭 AI性格同知識</span>
+        <button id="refinePersonalityBtn" class="refine-btn">✨ 優化</button>
+      </label>
       <textarea 
         id="personalityInput" 
         class="personality-input" 

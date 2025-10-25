@@ -12,6 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.static('public'));
+app.use(express.json());
 
 app.get('/health', (req, res) => {
   res.json({
@@ -19,6 +20,64 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'Cantonese Voice Agent'
   });
+});
+
+// Refine role/personality endpoint
+app.post('/refine', async (req, res) => {
+  try {
+    const { type, content, model } = req.body;
+    
+    if (!content || !type) {
+      return res.status(400).json({ error: 'Missing content or type' });
+    }
+    
+    console.log(`[Refine] ${type}: "${content}"`);
+    
+    let prompt;
+    if (type === 'role') {
+      prompt = `用戶想設定AI嘅身份係："${content}"
+
+請幫用戶優化呢個身份描述，用簡潔、清晰、地道嘅廣東話重新寫。要求：
+- 保持原意，但更清晰、更具體
+- 用地道廣東話
+- 簡潔有力（15-30字）
+- 唔好加任何解釋，只輸出優化後嘅身份描述
+
+只輸出優化後嘅身份，唔好有其他嘢。`;
+    } else {
+      prompt = `用戶想設定AI嘅性格同知識係："${content}"
+
+請幫用戶優化呢個性格描述，用簡潔、清晰、地道嘅廣東話重新寫。要求：
+- 保持原意，但更清晰、更具體
+- 用地道廣東話
+- 具體描述性格特點、知識範圍
+- 唔好加任何解釋，只輸出優化後嘅描述
+
+只輸出優化後嘅性格描述，唔好有其他嘢。`;
+    }
+    
+    let refinedText = '';
+    await generateStreamingResponse(
+      [{ role: 'user', content: prompt }],
+      (chunk) => { refinedText += chunk; },
+      () => {},
+      model || 'openai/gpt-4o',
+      false, // not mobile
+      '', // no custom personality
+      '' // no custom role
+    );
+    
+    const cleaned = refinedText.trim()
+      .replace(/^["「『]/, '') // Remove opening quotes
+      .replace(/["」』]$/, ''); // Remove closing quotes
+    
+    console.log(`[Refine] Result: "${cleaned}"`);
+    
+    res.json({ refined: cleaned });
+  } catch (error) {
+    console.error('[Refine] Error:', error);
+    res.status(500).json({ error: 'Failed to refine' });
+  }
 });
 
 const server = app.listen(PORT, async () => {

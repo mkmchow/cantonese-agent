@@ -29,6 +29,8 @@ const muteBtn = document.getElementById('muteBtn');
 const modelSelect = document.getElementById('modelSelect');
 const roleInput = document.getElementById('roleInput');
 const personalityInput = document.getElementById('personalityInput');
+const refineRoleBtn = document.getElementById('refineRoleBtn');
+const refinePersonalityBtn = document.getElementById('refinePersonalityBtn');
 const toggleConfigBtn = document.getElementById('toggleConfigBtn');
 const configSections = document.getElementById('configSections');
 const statusIndicator = document.getElementById('statusIndicator');
@@ -94,6 +96,8 @@ connectBtn.addEventListener('click', () => {
     modelSelect.disabled = false;
     roleInput.disabled = false;
     personalityInput.disabled = false;
+    refineRoleBtn.disabled = false;
+    refinePersonalityBtn.disabled = false;
     // Show config sections and hide toggle button
     configSections.style.display = 'block';
     toggleConfigBtn.style.display = 'none';
@@ -340,6 +344,8 @@ startBtn.addEventListener('click', async () => {
     modelSelect.disabled = true;
     roleInput.disabled = true;
     personalityInput.disabled = true;
+    refineRoleBtn.disabled = true;
+    refinePersonalityBtn.disabled = true;
     // Hide config sections on mobile to save screen space
     configSections.style.display = 'none';
     toggleConfigBtn.textContent = '⬇️ 顯示設定';
@@ -387,6 +393,8 @@ stopBtn.addEventListener('click', () => {
   modelSelect.disabled = false;
   roleInput.disabled = false;
   personalityInput.disabled = false;
+  refineRoleBtn.disabled = false;
+  refinePersonalityBtn.disabled = false;
   // Show config sections and hide toggle button
   configSections.style.display = 'block';
   toggleConfigBtn.style.display = 'none';
@@ -432,6 +440,84 @@ toggleConfigBtn.addEventListener('click', () => {
   const isHidden = configSections.style.display === 'none';
   configSections.style.display = isHidden ? 'block' : 'none';
   toggleConfigBtn.textContent = isHidden ? '⬆️ 隱藏設定' : '⬇️ 顯示設定';
+});
+
+// Refine role input using LLM
+refineRoleBtn.addEventListener('click', async () => {
+  const currentRole = roleInput.value.trim();
+  if (!currentRole) {
+    alert('請先輸入AI身份');
+    return;
+  }
+  
+  refineRoleBtn.disabled = true;
+  refineRoleBtn.classList.add('refining');
+  refineRoleBtn.textContent = '⏳ 優化中...';
+  
+  try {
+    const response = await fetch('/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        type: 'role',
+        content: currentRole,
+        model: modelSelect.value
+      })
+    });
+    
+    const data = await response.json();
+    if (data.refined) {
+      roleInput.value = data.refined;
+    } else {
+      alert('優化失敗，請重試');
+    }
+  } catch (error) {
+    console.error('Refine error:', error);
+    alert('優化失敗，請重試');
+  } finally {
+    refineRoleBtn.disabled = false;
+    refineRoleBtn.classList.remove('refining');
+    refineRoleBtn.textContent = '✨ 優化';
+  }
+});
+
+// Refine personality input using LLM
+refinePersonalityBtn.addEventListener('click', async () => {
+  const currentPersonality = personalityInput.value.trim();
+  if (!currentPersonality) {
+    alert('請先輸入AI性格同知識');
+    return;
+  }
+  
+  refinePersonalityBtn.disabled = true;
+  refinePersonalityBtn.classList.add('refining');
+  refinePersonalityBtn.textContent = '⏳ 優化中...';
+  
+  try {
+    const response = await fetch('/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        type: 'personality',
+        content: currentPersonality,
+        model: modelSelect.value
+      })
+    });
+    
+    const data = await response.json();
+    if (data.refined) {
+      personalityInput.value = data.refined;
+    } else {
+      alert('優化失敗，請重試');
+    }
+  } catch (error) {
+    console.error('Refine error:', error);
+    alert('優化失敗，請重試');
+  } finally {
+    refinePersonalityBtn.disabled = false;
+    refinePersonalityBtn.classList.remove('refining');
+    refinePersonalityBtn.textContent = '✨ 優化';
+  }
 });
 
 // Handle server messages
