@@ -1,6 +1,6 @@
 // Streaming LLM for natural Cantonese conversation
 import OpenAI from 'openai';
-import { BASE_SYSTEM_PROMPT, DEFAULT_PERSONALITY } from '../config/system-prompt.js';
+import { BASE_SYSTEM_PROMPT_CORE, DEFAULT_WORD_COUNT_INSTRUCTION, DEFAULT_PERSONALITY } from '../config/system-prompt.js';
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -25,8 +25,17 @@ const openai = new OpenAI({
  */
 export async function generateStreamingResponse(conversationHistory, onChunk, onComplete, model = null, isMobile = false, customPersonality = '', customRole = '', customWordLimit = null) {
   try {
-    // Build system prompt: BASE (always) + ROLE (if provided) + PERSONALITY (custom or default)
-    let systemPrompt = BASE_SYSTEM_PROMPT;
+    // Build system prompt: BASE_CORE (always) + WORD_COUNT (if no custom limit) + ROLE (if provided) + PERSONALITY (custom or default)
+    let systemPrompt = BASE_SYSTEM_PROMPT_CORE;
+    
+    // Add word count instruction ONLY if user hasn't specified custom limit
+    // This prevents conflict between system prompt instructions and max_tokens parameter
+    if (!customWordLimit) {
+      systemPrompt += DEFAULT_WORD_COUNT_INSTRUCTION;
+      console.log('[LLM] Using default word count guidance (10-30字)');
+    } else {
+      console.log('[LLM] Custom word limit set - omitting default word count guidance to avoid conflicts');
+    }
     
     // Add role if provided
     if (customRole) {
