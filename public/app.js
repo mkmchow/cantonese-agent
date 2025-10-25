@@ -17,6 +17,7 @@ let sttReady = false; // Track if STT is ready to receive audio
 let audioBuffer = []; // Buffer audio chunks until STT is ready
 const MAX_BUFFER_SIZE = 50; // Max chunks to buffer (~1 second at 16kHz)
 let allowAudioStreaming = false; // Don't stream audio until greeting finishes
+let isGreeting = true; // Track if we're playing the initial greeting (higher interruption threshold)
 
 // Mute functionality
 let isMuted = false; // Track if user has muted their microphone
@@ -194,12 +195,13 @@ startBtn.addEventListener('click', async () => {
     // NOTE: Increased to 0.04 to prevent AI's echo from triggering interruption
     // Echo cancellation reduces AI voice but doesn't eliminate it completely
     // Mobile: Much lower threshold since mobile mics are quieter and need higher sensitivity
-    const SPEECH_THRESHOLD = isMobile ? 0.02 : 0.04; // 50% lower for mobile
+    const SPEECH_THRESHOLD_NORMAL = isMobile ? 0.02 : 0.04; // 50% lower for mobile
+    const SPEECH_THRESHOLD_GREETING = isMobile ? 0.06 : 0.10; // Much higher for greeting (3x higher)
     const SILENCE_THRESHOLD = isMobile ? 0.004 : 0.008; // 50% lower for mobile
     
     // Mobile: Apply gain boost to amplify quieter signals
     const MOBILE_GAIN_BOOST = 1.5; // 50% amplification for mobile
-    console.log('[VAD] Thresholds - Speech:', SPEECH_THRESHOLD, 'Silence:', SILENCE_THRESHOLD);
+    console.log('[VAD] Thresholds - Normal:', SPEECH_THRESHOLD_NORMAL, 'Greeting:', SPEECH_THRESHOLD_GREETING, 'Silence:', SILENCE_THRESHOLD);
     if (isMobile) {
       console.log('[Mobile] Gain boost applied:', MOBILE_GAIN_BOOST + 'x');
     }
@@ -238,8 +240,11 @@ startBtn.addEventListener('click', async () => {
       // ONLY check for user speech when AI is speaking AND vadEnabled AND NOT muted
       // vadEnabled is delayed to let echo cancellation stabilize (prevents false interrupts)
       if (isAISpeaking && vadEnabled && !isMuted) {
+        // Use higher threshold during greeting to prevent false interruptions
+        const currentSpeechThreshold = isGreeting ? SPEECH_THRESHOLD_GREETING : SPEECH_THRESHOLD_NORMAL;
+        
         // AI is speaking - check if user wants to interrupt
-        if (!isSpeakingLocally && level > SPEECH_THRESHOLD) {
+        if (!isSpeakingLocally && level > currentSpeechThreshold) {
           // Detected audio above threshold - but is it real speech or echo?
           const timeSinceAudioStart = Date.now() - audioStartTime;
           const avgRecentLevel = recentAudioLevels.reduce((a, b) => a + b, 0) / recentAudioLevels.length;
@@ -272,7 +277,8 @@ startBtn.addEventListener('click', async () => {
       
       // Debug: Show audio level in console occasionally (every ~1 second)
       if (Math.random() < 0.02) {
-        console.log('[Audio Level] ' + level.toFixed(4) + ' (threshold: ' + SPEECH_THRESHOLD + ')');
+        const currentThreshold = isGreeting ? SPEECH_THRESHOLD_GREETING : SPEECH_THRESHOLD_NORMAL;
+        console.log('[Audio Level] ' + level.toFixed(4) + ' (threshold: ' + currentThreshold + ', greeting: ' + isGreeting + ')');
       }
 
       // Convert and send audio
@@ -294,7 +300,7 @@ startBtn.addEventListener('click', async () => {
         }
         
         // Track if user has spoken this turn (for mute functionality)
-        if (level > SPEECH_THRESHOLD && !isAISpeaking) {
+        if (level > SPEECH_THRESHOLD_NORMAL && !isAISpeaking) {
           userHasSpokenThisTurn = true;
         }
         
@@ -382,6 +388,7 @@ stopBtn.addEventListener('click', () => {
   sttReady = false;
   audioBuffer = [];
   allowAudioStreaming = false;
+  isGreeting = true; // Reset to greeting mode for next conversation
   audioUnlocked = false; // Reset iOS audio unlock
   preloadedAudio = null; // Clear permanent audio element
   
@@ -825,6 +832,11 @@ function playNextInQueue() {
   audio.pause();
   audio.currentTime = 0;
   
+  // Boost volume for mobile devices (iOS/Android have lower speaker volume)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  audio.volume = isMobile ? 1.0 : 0.9; // Max volume on mobile, slightly lower on desktop
+  console.log('[Audio] Volume set to:', audio.volume, '(mobile: ' + isMobile + ')');
+  
   currentAudio = audio;
   
   // Set source AFTER adding event listeners (iOS requirement)
@@ -870,7 +882,8 @@ function playNextInQueue() {
     // If queue is empty, greeting/response is finished - allow audio streaming
     if (audioQueue.length === 0) {
       allowAudioStreaming = true;
-      console.log('[Audio] ✅ Audio finished - microphone streaming enabled');
+      isGreeting = false; // Greeting is finished, use normal interruption threshold
+      console.log('[Audio] ✅ Audio finished - microphone streaming enabled, greeting mode off');
     }
     
     // Play next in queue after a tiny delay
