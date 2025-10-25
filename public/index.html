@@ -73,10 +73,14 @@
       padding: 20px;
       background: white;
       border-bottom: 1px solid #e0e0e0;
-      position: sticky;
-      top: 0;
-      z-index: 100;
       flex-shrink: 0;
+    }
+    
+    /* Mobile: Not sticky, scrolls away */
+    @media (max-width: 767px) {
+      .header {
+        position: relative;
+      }
     }
 
     .header h1 {
@@ -91,7 +95,9 @@
       .header {
         padding: 30px 40px 20px;
         border-bottom: none;
-        position: relative;
+        position: sticky;
+        top: 0;
+        z-index: 100;
       }
 
       .header h1 {
@@ -105,6 +111,9 @@
       z-index: 85;
       flex-shrink: 0;
       padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     
     /* Mobile: Fixed at bottom, right above the fixed buttons */
@@ -137,6 +146,7 @@
       padding: 18px 15px;
       text-align: center;
       font-size: 0.95rem;
+      width: 100%;
     }
     
     /* Mobile: Smaller padding for compact layout */
@@ -286,6 +296,19 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+    
+    /* Mobile: Sticky at top during conversation */
+    @media (max-width: 767px) {
+      .toggle-config-btn {
+        position: sticky;
+        top: 0;
+        z-index: 95;
+        margin: 0;
+        width: 100%;
+        border-radius: 0;
+      }
     }
 
     .toggle-config-btn:hover {
@@ -563,6 +586,16 @@
       overflow: hidden;
       padding: 10px 20px;
       flex-shrink: 0;
+    }
+    
+    /* Mobile: Sticky at top during conversation */
+    @media (max-width: 767px) {
+      .waveform {
+        position: sticky;
+        top: 0;
+        z-index: 95;
+        border-bottom: 1px solid #e0e0e0;
+      }
     }
 
     @media (min-width: 768px) {
