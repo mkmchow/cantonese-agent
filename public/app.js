@@ -610,22 +610,20 @@ function handleServerMessage(data) {
       debugMsg('📥 Audio chunk: ' + data.text.substring(0, 15));
       console.log('[Chunk] Received:', data.text);
       
-      // Convert thinking message to final message when first audio arrives
-      if (data.isFirst && thinkingMsg) {
-        // Update the thinking message to be a regular AI message
-        thinkingMsg.style.opacity = '1';
-        thinkingMsg.querySelector('.message-label').textContent = 'AI';
-        thinkingMsg.querySelector('.message-text').textContent = data.text;
-        thinkingMsg = null; // Clear reference
-        // Reset user spoken flag when AI starts responding
-        userHasSpokenThisTurn = false;
-      } else if (data.isFirst) {
-        // No thinking message, add new message
+      // Handle first audio chunk
+      if (data.isFirst) {
+        // Remove thinking message if it exists
+        if (thinkingMsg) {
+          console.log('[AI] Removing thinking message and creating fresh AI message');
+          thinkingMsg.remove();
+          thinkingMsg = null;
+        }
+        // Create new AI message with the first audio chunk
         addMessage('ai', data.text);
         // Reset user spoken flag when AI starts responding
         userHasSpokenThisTurn = false;
       } else {
-        // Append to last AI message
+        // Append subsequent chunks to last AI message
         appendToLastAIMessage(data.text);
       }
       
