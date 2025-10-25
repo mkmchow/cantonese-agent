@@ -108,10 +108,14 @@
       border-bottom: 1px solid #e0e0e0;
     }
     
-    /* Mobile: Not sticky, part of scrollable content */
+    /* Mobile: Sticky at bottom of scrollable area, above fixed buttons */
     @media (max-width: 767px) {
       .sticky-top {
-        position: relative;
+        position: sticky;
+        bottom: 0;
+        border-bottom: none;
+        border-top: 1px solid #e0e0e0;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
       }
     }
     
@@ -596,13 +600,6 @@
     </div>
 
     <div class="scrollable-content">
-      <div class="sticky-top">
-        <div class="status">
-          <span class="status-indicator" id="statusIndicator"></span>
-          <span id="statusText">未連接</span>
-        </div>
-      </div>
-
       <button id="toggleConfigBtn" class="toggle-config-btn" style="display: none;">⬇️ 顯示設定</button>
 
       <div id="configSections">
@@ -678,6 +675,13 @@
         <div style="text-align: center; color: #999; padding: 60px 20px;">
           準備好後按「開始對話」<br>
           <small style="margin-top: 10px; display: block;">講廣東話同AI傾偈</small>
+        </div>
+      </div>
+
+      <div class="sticky-top">
+        <div class="status">
+          <span class="status-indicator" id="statusIndicator"></span>
+          <span id="statusText">未連接</span>
         </div>
       </div>
     </div><!-- End scrollable-content -->

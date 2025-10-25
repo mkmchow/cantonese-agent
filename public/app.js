@@ -42,20 +42,21 @@ const waveform = document.getElementById('waveform');
 const mobileHint = document.getElementById('mobileHint');
 const debugLog = document.getElementById('debugLog');
 
-// Debug logging (visible on mobile)
+// Debug logging (console only, mobile UI hidden)
 function debugMsg(msg) {
   console.log(msg);
-  if (debugLog && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-    debugLog.style.display = 'block';
-    const line = document.createElement('div');
-    line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-    debugLog.appendChild(line);
-    debugLog.scrollTop = debugLog.scrollHeight;
-    // Keep last 10 lines
-    while (debugLog.children.length > 10) {
-      debugLog.removeChild(debugLog.firstChild);
-    }
-  }
+  // Mobile debug UI disabled for cleaner interface
+  // if (debugLog && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  //   debugLog.style.display = 'block';
+  //   const line = document.createElement('div');
+  //   line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  //   debugLog.appendChild(line);
+  //   debugLog.scrollTop = debugLog.scrollHeight;
+  //   // Keep last 10 lines
+  //   while (debugLog.children.length > 10) {
+  //     debugLog.removeChild(debugLog.firstChild);
+  //   }
+  // }
 }
 
 // Show mobile hint if on mobile device
