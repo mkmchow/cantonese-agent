@@ -832,10 +832,38 @@ function playNextInQueue() {
   audio.pause();
   audio.currentTime = 0;
   
-  // Boost volume for mobile devices (iOS/Android have lower speaker volume)
+  // Set base volume to max
+  audio.volume = 1.0;
+  
+  // Use Web Audio API to amplify beyond 1.0 (only for mobile)
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  audio.volume = isMobile ? 1.0 : 0.9; // Max volume on mobile, slightly lower on desktop
-  console.log('[Audio] Volume set to:', audio.volume, '(mobile: ' + isMobile + ')');
+  if (isMobile && window.AudioContext) {
+    try {
+      // Create audio context if not exists
+      if (!window.mobileAudioContext) {
+        window.mobileAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        window.mobileGainNode = window.mobileAudioContext.createGain();
+        window.mobileGainNode.connect(window.mobileAudioContext.destination);
+        console.log('[Audio] Web Audio API context created for amplification');
+      }
+      
+      // Create source from audio element if not already connected
+      if (!audio.webAudioSource) {
+        audio.webAudioSource = window.mobileAudioContext.createMediaElementSource(audio);
+        audio.webAudioSource.connect(window.mobileGainNode);
+        console.log('[Audio] Audio element connected to GainNode');
+      }
+      
+      // Set gain to 3x for testing (values > 1.0 amplify beyond normal max)
+      window.mobileGainNode.gain.value = 3.0;
+      console.log('[Audio] 📢 Mobile volume AMPLIFIED to 3.0x (testing)');
+    } catch (e) {
+      console.error('[Audio] Web Audio API failed:', e);
+      console.log('[Audio] Volume set to:', audio.volume, '(mobile, no amplification)');
+    }
+  } else {
+    console.log('[Audio] Volume set to:', audio.volume, '(desktop, no amplification)');
+  }
   
   currentAudio = audio;
   
